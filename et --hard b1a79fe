@@ -1,0 +1,39 @@
+[33mf7e25b2[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mhamza-model-entegre[m[33m)[m HEAD@{0}: merge origin/test1_duzenlemeler: Merge made by the 'ort' strategy.
+[33mb1a79fe[m[33m ([m[1;31morigin/hamza-model-entegre[m[33m)[m HEAD@{1}: checkout: moving from hamza-model-entegre to hamza-model-entegre
+[33mb1a79fe[m[33m ([m[1;31morigin/hamza-model-entegre[m[33m)[m HEAD@{2}: commit: Hamza entegrasyon kodlari eklendi
+[33mf3d5af9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{3}: reset: moving to origin/main
+[33md959c12[m HEAD@{4}: commit: Buyuk model dosyasi git takibinden cikarildi
+[33m05df01c[m[33m ([m[1;32mtest1_duzenlemeler[m[33m)[m HEAD@{5}: checkout: moving from test1_duzenlemeler to hamza-model-entegre
+[33m05df01c[m[33m ([m[1;32mtest1_duzenlemeler[m[33m)[m HEAD@{6}: commit: Son degisiklikler kaydedildi
+[33m7e68edc[m[33m ([m[1;31morigin/test1_duzenlemeler[m[33m)[m HEAD@{7}: commit: download_model scripti eklendi
+[33m6d0a32e[m HEAD@{8}: pull origin test1_duzenlemeler: Fast-forward
+[33m7159b22[m HEAD@{9}: checkout: moving from model_entegre to test1_duzenlemeler
+[33m76a905b[m[33m ([m[1;32mmodel_entegre[m[33m)[m HEAD@{10}: commit: Requirements ve gitignore dosyaları güncellendi
+[33m622fd3f[m[33m ([m[1;31morigin/model_entegre[m[33m)[m HEAD@{11}: commit: Model entegrasyonu ve kod dosyaları eklendi
+[33m7159b22[m HEAD@{12}: reset: moving to HEAD~1
+[33m3a7c08b[m HEAD@{13}: commit: Model entegrasyonu ve llm duzenlemeleri
+[33m7159b22[m HEAD@{14}: reset: moving to HEAD~1
+[33mce48731[m HEAD@{15}: reset: moving to HEAD~1
+[33mf6abd31[m HEAD@{16}: commit: Large model file removed and gitignore updated
+[33mce48731[m HEAD@{17}: commit: Model entegrasyonu ve llm testleri tamamlandi
+[33m7159b22[m HEAD@{18}: checkout: moving from test1_duzenlemeler to model_entegre
+[33m7159b22[m HEAD@{19}: checkout: moving from test to test1_duzenlemeler
+[33m9699348[m[33m ([m[1;32mtest[m[33m)[m HEAD@{20}: commit: feat: AI motoru geliştirmeleri tamamlandı
+[33m645a7e9[m[33m ([m[1;31morigin/test[m[33m)[m HEAD@{21}: pull origin test: Fast-forward
+[33m69044f5[m[33m ([m[1;32mai_moturu[m[33m)[m HEAD@{22}: checkout: moving from ai_moturu to test
+[33m69044f5[m[33m ([m[1;32mai_moturu[m[33m)[m HEAD@{23}: pull origin test: Fast-forward
+[33m4796faa[m[33m ([m[1;31morigin/ai_moturu[m[33m)[m HEAD@{24}: commit: ddd
+[33m5e73888[m HEAD@{25}: commit: llm kısmı oluşturulmaya başlandı
+[33mf3d5af9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{26}: checkout: moving from main to ai_moturu
+[33mf3d5af9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{27}: reset: moving to HEAD
+[33mf3d5af9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{28}: reset: moving to HEAD~1
+[33m916093d[m HEAD@{29}: commit: Add local env and requirements updates
+[33mf3d5af9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{30}: reset: moving to HEAD
+[33mf3d5af9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{31}: pull origin main: Fast-forward
+[33m49b9b56[m HEAD@{32}: reset: moving to HEAD
+[33m49b9b56[m HEAD@{33}: commit: Fix AI analysis procedure call and RAG query parameter
+[33md41994d[m HEAD@{34}: commit: Fix AI analysis procedure call and RAG query parameter
+[33mb6a0d1f[m HEAD@{35}: pull origin main: Fast-forward
+[33m29ca745[m HEAD@{36}: pull origin main: Fast-forward
+[33mbbcab07[m HEAD@{37}: pull origin main: Fast-forward
+[33mbedab7e[m HEAD@{38}: clone: from https://github.com/hilal-cogul/akilli-destek-asistani.git

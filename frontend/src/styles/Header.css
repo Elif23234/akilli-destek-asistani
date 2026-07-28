@@ -1,0 +1,23 @@
+.header {
+    height: 70px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #dcdcdc;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 25px;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 24px;
+    color: #1f2937;
+}
+
+.header p {
+    margin: 5px 0 0;
+    color: #6b7280;
+    font-size: 14px;
+}
