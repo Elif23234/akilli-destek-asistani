@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks,Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional
 from database import SessionLocal
@@ -34,27 +34,26 @@ class AdminGiris(BaseModel):
     sifre: str
 class YeniYorum(BaseModel):
     talep_id: str
-    kullanici_id: Optional[str] = None 
     mesaj: str
     yeni_durum: Optional[str] = None
-    islem_yapan_tipi: str = "personel" # musteri, personel, yz
 class DurumGuncelleme(BaseModel):
     takip_no: str
-    kullanici_id: str
     yeni_durum: str
+
+
 class MusteriCozumOnayi(BaseModel):
     talep_id: str
     cozuldu_mu: bool
 
+
 class PersonelOnayIslemi(BaseModel):
     talep_id: str
-    personel_id: str
     yanit_metni: str
     islem_tipi: str = "AI_YANITI_ONAYLANDI"
 
+
 class TalepYonlendirme(BaseModel):
     talep_id: str
-    personel_id: str
     yeni_kategori_id: int
     mesaj: str = "Talep yanlış departmana geldiği için ilgili birime yönlendirildi."
 
@@ -90,16 +89,20 @@ def admin_girisi(giris: AdminGiris):
 
 @app.get("/admin/token-kontrol", tags=["Admin"])
 def admin_token_kontrol(
-    kullanici_adi: str = Depends(admin_token_dogrula),
+    admin: dict = Depends(admin_token_dogrula),
 ):
     return {
         "mesaj": "Yönetici tokenı geçerli.",
-        "kullanici_adi": kullanici_adi,
+        "kullanici_adi": admin["kullanici_adi"],
+        "kullanici_id": admin["kullanici_id"],
+        "rol": admin["rol"],
     }
 
 # 2. Yönetim Paneli - Dashboard Özeti (GET)
 @app.get("/talepler", tags=["Talepler"])
-def talepleri_getir():
+def talepleri_getir(
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
 
     try:
@@ -168,7 +171,8 @@ def talepleri_getir():
 def filtreli_talepleri_getir(
     durum: Optional[str] = None,
     oncelik: Optional[str] = None,
-    kategori_id: Optional[int] = None
+    kategori_id: Optional[int] = None,
+    _admin: dict = Depends(admin_token_dogrula),
 ):
     db = SessionLocal()
     try:
@@ -222,7 +226,10 @@ def filtreli_talepleri_getir(
 
 # 4. Talep Detayı (GET)
 @app.get("/talepler/{takip_no}" , tags=["Talepler"])
-def talep_detayi_getir(takip_no: str):
+def talep_detayi_getir(
+    takip_no: str,
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         sorgu = text("SELECT * FROM vw_talep_detayi WHERE talep_takip_no = :takip_no;")
@@ -284,7 +291,10 @@ def yeni_talep_ekle(talep: YeniTalep, background_tasks: BackgroundTasks):
 
 # 6. Talebe Yorum/Cevap Ekleme (POST) 
 @app.post("/yorumlar" , tags=["Yorumlar"])
-def talebe_yorum_ekle(yorum: YeniYorum):
+def talebe_yorum_ekle(
+    yorum: YeniYorum,
+    admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         sorgu = text("""
@@ -294,10 +304,10 @@ def talebe_yorum_ekle(yorum: YeniYorum):
         """)
         db.execute(sorgu, {
             "talep_id": yorum.talep_id,
-            "kullanici_id": yorum.kullanici_id,
+            "kullanici_id": admin["kullanici_id"],
             "mesaj": yorum.mesaj,
             "yeni_durum": yorum.yeni_durum,
-            "islem_yapan_tipi": yorum.islem_yapan_tipi
+            "islem_yapan_tipi": "personel"
         })
         db.commit()
         return {"mesaj": "Yorum işleme alındı ve otomasyon kuralları çalıştırıldı."}
@@ -306,7 +316,9 @@ def talebe_yorum_ekle(yorum: YeniYorum):
 
 # 7. Yönetim Paneli - Dashboard Özeti (GET)
 @app.get("/yonetim/paneli/ozeti" , tags=["Yönetim Paneli"])
-def yonetim_paneli_ozeti():
+def yonetim_paneli_ozeti(
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         sorgu = text("SELECT * FROM vw_yonetim_paneli_ozeti;")
@@ -318,7 +330,9 @@ def yonetim_paneli_ozeti():
 
 # 8. Kategori İstatistikleri (GET)
 @app.get("/kategoriler/istatistikler" , tags=["İstatistikler"])
-def kategori_istatistikleri():
+def kategori_istatistikleri(
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         sorgu = text("SELECT * FROM vw_kategori_istatistikleri;")
@@ -330,7 +344,10 @@ def kategori_istatistikleri():
 
 # 9. RAG Arama (GET)
 @app.get("/talepler/rag/arama" , tags=["Talepler"])
-def talep_rag_arama(kelime: str):
+def talep_rag_arama(
+    kelime: str,
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         # 1. Kullanıcıdan gelen metni vektöre dönüştür
@@ -351,7 +368,10 @@ def talep_rag_arama(kelime: str):
 
 # 10. Durum Güncelleme (PUT)
 @app.put("/talepler/durum-guncelle" , tags=["Talepler"])
-def talep_durum_guncelle(guncelleme: DurumGuncelleme):
+def talep_durum_guncelle(
+    guncelleme: DurumGuncelleme,
+    admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         # 1. Verilen takip_no'ya ait gerçek talep_id'yi (UUID) bulalım
@@ -367,7 +387,7 @@ def talep_durum_guncelle(guncelleme: DurumGuncelleme):
         sorgu = text("CALL sp_talep_durum_guncelle(:talep_id, :kullanici_id, :yeni_durum)")
         db.execute(sorgu, {
             "talep_id": gercek_talep_id,
-            "kullanici_id": guncelleme.kullanici_id,
+            "kullanici_id": admin["kullanici_id"],
             "yeni_durum": guncelleme.yeni_durum
         })
         db.commit()
@@ -377,7 +397,12 @@ def talep_durum_guncelle(guncelleme: DurumGuncelleme):
 
 # 11. Pipeline ve Veritabanı Entegrasyonunu Sağlayan Tam Endpoint
 @app.post("/talepler/yapay-zeka-analiz", tags=["Yapay Zeka Analiz"])
-def ai_talep_analiz_ve_kaydet(talep_id: str, baslik: str, icerik: str):
+def ai_talep_analiz_ve_kaydet(
+    talep_id: str,
+    baslik: str,
+    icerik: str,
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
     try:
         sonuc = talep_analiz_et_ve_uygula( talep_id, baslik, icerik)
@@ -431,7 +456,10 @@ def musteri_cozum_onayini_isle(onay: MusteriCozumOnayi):
 
 # 13. Personel Paneli - Onay Bekleyen Talepler (GET)
 @app.get("/personel/onay-bekleyenler", tags=["Personel Paneli"])
-def onay_bekleyenleri_getir(departman_adi: Optional[str] = None):
+def onay_bekleyenleri_getir(
+    departman_adi: Optional[str] = None,
+    _admin: dict = Depends(admin_token_dogrula),
+):
     """
     Durumu 'onay_bekliyor' olan 2. Senaryo taleplerini listeler.
     Opsiyonel olarak departman adına göre filtreleme yapılabilir.
@@ -454,7 +482,10 @@ def onay_bekleyenleri_getir(departman_adi: Optional[str] = None):
 
 # 14. Personel Onay İşlemi ve Müşteriye Gönderim (POST)
 @app.post("/personel/onayla-ve-gonder", tags=["Personel Paneli"])
-def personel_cevabi_gonder(onay: PersonelOnayIslemi):
+def personel_cevabi_gonder(
+    onay: PersonelOnayIslemi,
+    admin: dict = Depends(admin_token_dogrula),
+):
     """
     Personelin AI taslağını onaylayıp veya düzenleyip müşteriye ilettiği endpoint.
     Kullanıcıya bildirim gitmesi için durumu 'musteri_yaniti_bekleniyor' yapar.
@@ -473,13 +504,13 @@ def personel_cevabi_gonder(onay: PersonelOnayIslemi):
         
         db.execute(sorgu, {
             "talep_id": onay.talep_id,
-            "kullanici_id": onay.personel_id,
+            "kullanici_id": admin["kullanici_id"],
             "mesaj": log_mesaji
         })
         
         db.commit()
         return {
-            "mesaj": "Yanıt müşteriye başarıyla iletildi. 'Sorun Çözüldü mü?' geri bildirimi bekleniyor."
+            "mesaj": "Yanıt sisteme kaydedildi. Müşteri geri bildirimi bekleniyor."
         }
     except Exception as e:
         db.rollback()
@@ -489,7 +520,10 @@ def personel_cevabi_gonder(onay: PersonelOnayIslemi):
 
 # 15. Personel Paneli - İncelenmesi Gereken Talepler (GET)
 @app.get("/personel/incelenenler", tags=["Personel Paneli"])
-def incelenen_talepleri_getir(departman_adi: Optional[str] = None):
+def incelenen_talepleri_getir(
+    departman_adi: Optional[str] = None,
+    _admin: dict = Depends(admin_token_dogrula),
+):
     """
     Durumu 'inceleniyor' olan 3. Senaryo taleplerini listeler.
     Yapay zekanın güven skoru düşük olduğu için (veya Diğer kategorisi) 
@@ -513,7 +547,10 @@ def incelenen_talepleri_getir(departman_adi: Optional[str] = None):
 
 # 16. Personel İnceleme ve Müşteriye Gönderim (POST)
 @app.post("/personel/incelenen-yanitla", tags=["Personel Paneli"])
-def incelenen_talebi_yanitla(islem: PersonelOnayIslemi):
+def incelenen_talebi_yanitla(
+    islem: PersonelOnayIslemi,
+    admin: dict = Depends(admin_token_dogrula),
+):
     """
     Personelin, YZ'nin kararsız kaldığı talebi inceleyip
     hazırladığı nihai yanıtı müşteriye gönderdiği endpoint.
@@ -534,13 +571,13 @@ def incelenen_talebi_yanitla(islem: PersonelOnayIslemi):
         
         db.execute(sorgu, {
             "talep_id": islem.talep_id,
-            "kullanici_id": islem.personel_id,
+            "kullanici_id": admin["kullanici_id"],
             "mesaj": log_mesaji
         })
         
         db.commit()
         return {
-            "mesaj": "Manuel inceleme tamamlandı ve yanıt müşteriye iletildi. 'Sorun Çözüldü mü?' geri bildirimi bekleniyor."
+            "mesaj": "Manuel yanıt sisteme kaydedildi. Müşteri geri bildirimi bekleniyor."
         }
     except Exception as e:
         db.rollback()
@@ -550,7 +587,10 @@ def incelenen_talebi_yanitla(islem: PersonelOnayIslemi):
 
 # 17. Personel Paneli - Talep Yönlendirme (PUT)
 @app.put("/personel/talep-yonlendir", tags=["Personel Paneli"])
-def departmana_yonlendir(islem: TalepYonlendirme):
+def departmana_yonlendir(
+    islem: TalepYonlendirme,
+    admin: dict = Depends(admin_token_dogrula),
+):
     """
     Personelin yanlış departmana gelmiş bir talebi, 
     doğru kategoriye (dolayısıyla departmana) yönlendirmesini sağlar.
@@ -576,7 +616,7 @@ def departmana_yonlendir(islem: TalepYonlendirme):
         """)
         db.execute(log_sorgu, {
             "talep_id": islem.talep_id,
-            "kullanici_id": islem.personel_id,
+            "kullanici_id": admin["kullanici_id"],
             "mesaj": f"[YÖNLENDİRME]: {islem.mesaj}"
         })
         
@@ -590,7 +630,9 @@ def departmana_yonlendir(islem: TalepYonlendirme):
 
 # 18. Kategoriler Listesi (GET)
 @app.get("/kategoriler", tags=["Kategoriler"])
-def tum_kategorileri_getir():
+def tum_kategorileri_getir(
+    _admin: dict = Depends(admin_token_dogrula),
+):
     """
     Sistemdeki tüm kategorileri (departman bilgileriyle birlikte) listeler.
     Arayüzdeki yönlendirme (dropdown) menülerini doldurmak için kullanılır.
@@ -607,7 +649,9 @@ def tum_kategorileri_getir():
         db.close()
 # 19. Dashboard İstatistikleri (GET)
 @app.get("/dashboard/istatistikler", tags=["Dashboard"])
-def dashboard_istatistikleri():
+def dashboard_istatistikleri(
+    _admin: dict = Depends(admin_token_dogrula),
+):
     db = SessionLocal()
 
     try:

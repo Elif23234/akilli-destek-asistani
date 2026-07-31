@@ -1,8 +1,25 @@
 const API_URL = "http://127.0.0.1:8000";
 
+function getAuthHeaders() {
+  const token = sessionStorage.getItem("admin_token");
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export async function getTalepler() {
   const response = await fetch(
-    `${API_URL}/talepler/filtreli`
+    `${API_URL}/talepler/filtreli`,
+    {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
   );
 
   if (!response.ok) {
@@ -14,7 +31,12 @@ export async function getTalepler() {
 
 export async function getTalepDetayi(takipNo) {
   const response = await fetch(
-    `${API_URL}/talepler/${encodeURIComponent(takipNo)}`
+    `${API_URL}/talepler/${encodeURIComponent(takipNo)}`,
+    {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
   );
 
   if (!response.ok) {
@@ -28,7 +50,12 @@ export async function getBenzerTalepler(kelime) {
   const response = await fetch(
     `${API_URL}/talepler/rag/arama?kelime=${encodeURIComponent(
       kelime
-    )}`
+    )}`,
+    {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
   );
 
   if (!response.ok) {
@@ -37,9 +64,15 @@ export async function getBenzerTalepler(kelime) {
 
   return response.json();
 }
+
 export async function getDashboardIstatistikleri() {
   const response = await fetch(
-    `${API_URL}/dashboard/istatistikler`
+    `${API_URL}/dashboard/istatistikler`,
+    {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
   );
 
   if (!response.ok) {
@@ -54,11 +87,9 @@ export async function getDashboardIstatistikleri() {
 export async function yeniTalepOlustur(talepBilgileri) {
   const response = await fetch(`${API_URL}/talepler`, {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json",
     },
-
     body: JSON.stringify(talepBilgileri),
   });
 
@@ -72,17 +103,24 @@ export async function yeniTalepOlustur(talepBilgileri) {
 
   return sonuc;
 }
-export async function adminGirisi(kullaniciAdi, sifre) {
-  const response = await fetch(`${API_URL}/admin/giris`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      kullanici_adi: kullaniciAdi,
-      sifre: sifre,
-    }),
-  });
+
+export async function adminGirisi(
+  kullaniciAdi,
+  sifre
+) {
+  const response = await fetch(
+    `${API_URL}/admin/giris`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        kullanici_adi: kullaniciAdi,
+        sifre: sifre,
+      }),
+    }
+  );
 
   let sonuc = {};
 

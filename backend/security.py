@@ -1,6 +1,7 @@
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import jwt
 from dotenv import load_dotenv
@@ -16,9 +17,16 @@ from pwdlib import PasswordHash
 load_dotenv()
 
 
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "")
-ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
+ADMIN_PASSWORD_HASH = os.getenv(
+    "ADMIN_PASSWORD_HASH",
+    "",
+).strip()
+ADMIN_KULLANICI_ID = os.getenv(
+    "ADMIN_KULLANICI_ID",
+    "",
+).strip()
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "").strip()
 
 JWT_ALGORITHM = "HS256"
 ADMIN_TOKEN_SURE_DAKIKA = int(
@@ -35,6 +43,18 @@ if not ADMIN_PASSWORD_HASH:
     raise RuntimeError(
         ".env içinde ADMIN_PASSWORD_HASH bulunamadı."
     )
+
+if not ADMIN_KULLANICI_ID:
+    raise RuntimeError(
+        ".env içinde ADMIN_KULLANICI_ID bulunamadı."
+    )
+
+try:
+    UUID(ADMIN_KULLANICI_ID)
+except ValueError as hata:
+    raise RuntimeError(
+        "ADMIN_KULLANICI_ID geçerli bir UUID olmalıdır."
+    ) from hata
 
 if not JWT_SECRET_KEY:
     raise RuntimeError(
@@ -82,22 +102,21 @@ def admin_token_olustur(
     token_verisi = {
         "sub": kullanici_adi,
         "rol": "admin",
+        "kullanici_id": ADMIN_KULLANICI_ID,
         "exp": sona_erme_zamani,
     }
 
-    token = jwt.encode(
+    return jwt.encode(
         token_verisi,
         JWT_SECRET_KEY,
         algorithm=JWT_ALGORITHM,
     )
 
-    return token
-
 
 def admin_token_dogrula(
     kimlik: HTTPAuthorizationCredentials
     | None = Depends(bearer_guvenligi),
-) -> str:
+) -> dict:
     yetkisiz_hatasi = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=(
@@ -126,6 +145,7 @@ def admin_token_dogrula(
 
     kullanici_adi = token_verisi.get("sub")
     rol = token_verisi.get("rol")
+    kullanici_id = token_verisi.get("kullanici_id")
 
     if kullanici_adi != ADMIN_USERNAME:
         raise yetkisiz_hatasi
@@ -133,4 +153,16 @@ def admin_token_dogrula(
     if rol != "admin":
         raise yetkisiz_hatasi
 
-    return kullanici_adi
+    if kullanici_id != ADMIN_KULLANICI_ID:
+        raise yetkisiz_hatasi
+
+    try:
+        UUID(str(kullanici_id))
+    except ValueError:
+        raise yetkisiz_hatasi
+
+    return {
+        "kullanici_adi": kullanici_adi,
+        "rol": rol,
+        "kullanici_id": kullanici_id,
+    }
