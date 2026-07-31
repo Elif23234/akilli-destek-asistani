@@ -1,24 +1,48 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTalepler } from "../services/api";
+
+import {
+  getTalepler,
+  getDashboardIstatistikleri,
+} from "../services/api";
+
 import "../styles/Dashboard.css";
 
 function Dashboard() {
   const navigate = useNavigate();
 
   const [talepler, setTalepler] = useState([]);
-  const [yukleniyor, setYukleniyor] = useState(true);
+  const [dashboardVerisi, setDashboardVerisi] =
+    useState(null);
+
+  const [yukleniyor, setYukleniyor] =
+    useState(true);
+
   const [hata, setHata] = useState("");
 
   useEffect(() => {
-    async function talepleriGetir() {
+    async function dashboardVerileriniGetir() {
       try {
-        const sonuc = await getTalepler();
+        const [
+          taleplerSonucu,
+          dashboardSonucu,
+        ] = await Promise.all([
+          getTalepler(),
+          getDashboardIstatistikleri(),
+        ]);
 
-        if (Array.isArray(sonuc.veri)) {
-          setTalepler(sonuc.veri);
+        if (Array.isArray(taleplerSonucu.veri)) {
+          setTalepler(taleplerSonucu.veri);
         } else {
           setTalepler([]);
+        }
+
+        if (dashboardSonucu.veri) {
+          setDashboardVerisi(
+            dashboardSonucu.veri
+          );
+        } else {
+          setDashboardVerisi(null);
         }
       } catch (error) {
         setHata(error.message);
@@ -27,7 +51,7 @@ function Dashboard() {
       }
     }
 
-    talepleriGetir();
+    dashboardVerileriniGetir();
   }, []);
 
   function metniKucult(deger) {
@@ -36,260 +60,451 @@ function Dashboard() {
       .toLocaleLowerCase("tr-TR");
   }
 
-  const acikTalepSayisi = talepler.filter((talep) => {
-    const durum = metniKucult(talep.talep_durum);
-
-    return durum === "acik" || durum === "açık";
-  }).length;
-
-  const onayBekleyenSayisi = talepler.filter((talep) => {
-    const durum = metniKucult(talep.talep_durum);
-
-    return durum === "onay_bekliyor";
-  }).length;
-
-  const otomatikYanitlananSayisi = talepler.filter((talep) => {
-    const durum = metniKucult(talep.talep_durum);
-
-    return durum === "otomatik_yanitlandi";
-  }).length;
-
-  const acilTalepSayisi = talepler.filter((talep) => {
-    const oncelik = metniKucult(
-      talep.yz_oncelik_seviyesi
-    );
-
-    return oncelik === "acil";
-  }).length;
-
-  const aiAnalizEdilenTalepSayisi = talepler.filter(
-    (talep) =>
-      talep.yz_ozet ||
-      talep.yz_oncelik_seviyesi ||
-      talep.yz_guven_skoru != null
-  ).length;
-
-  const simdi = new Date();
-
-  const yirmiDortSaatOnce = new Date(
-    simdi.getTime() - 24 * 60 * 60 * 1000
-  );
-
-  const sonYirmiDortSaatTalepSayisi = talepler.filter(
+  const acikTalepSayisi = talepler.filter(
     (talep) => {
-      if (!talep.talep_olusturulma_tarihi) {
-        return false;
-      }
-
-      const olusturulmaTarihi = new Date(
-        talep.talep_olusturulma_tarihi
+      const durum = metniKucult(
+        talep.talep_durum
       );
 
       return (
-        !Number.isNaN(olusturulmaTarihi.getTime()) &&
-        olusturulmaTarihi >= yirmiDortSaatOnce
+        durum === "acik" ||
+        durum === "açık"
       );
     }
   ).length;
 
-  const kategoriSayilari = {};
+  const onayBekleyenSayisi = talepler.filter(
+    (talep) => {
+      const durum = metniKucult(
+        talep.talep_durum
+      );
 
-  talepler.forEach((talep) => {
-    const kategoriAdi =
-      talep.kategori_ad?.trim() || "Kategorisiz";
-
-    if (kategoriSayilari[kategoriAdi]) {
-      kategoriSayilari[kategoriAdi] =
-        kategoriSayilari[kategoriAdi] + 1;
-    } else {
-      kategoriSayilari[kategoriAdi] = 1;
+      return durum === "onay_bekliyor";
     }
-  });
+  ).length;
 
-  const kategoriDagilimi = Object.entries(
-    kategoriSayilari
-  ).sort((birinciKategori, ikinciKategori) => {
-    return ikinciKategori[1] - birinciKategori[1];
-  });
+  const otomatikYanitlananSayisi =
+    talepler.filter((talep) => {
+      const durum = metniKucult(
+        talep.talep_durum
+      );
+
+      return durum === "otomatik_yanitlandi";
+    }).length;
+
+  const aiAnalizEdilenTalepSayisi =
+    talepler.filter(
+      (talep) =>
+        talep.yz_ozet ||
+        talep.yz_oncelik_seviyesi ||
+        talep.yz_guven_skoru != null
+    ).length;
+
+  const sonYirmiDortSaatTalepSayisi =
+    dashboardVerisi
+      ?.son_24_saat_talep_sayisi || 0;
+
+  const kritikTalepSayisi =
+    dashboardVerisi?.kritik_talep_sayisi ||
+    0;
+
+  const ortalamaYanitBeklemeSuresi =
+    dashboardVerisi
+      ?.ortalama_yanit_bekleme_suresi ||
+    "Henüz yanıt verisi yok";
+
+  const kategoriDagilimi =
+    dashboardVerisi?.kategori_dagilimi ||
+    [];
 
   if (yukleniyor) {
-    return <p>Talepler yükleniyor...</p>;
+    return (
+      <section className="dashboard-durum-ekrani">
+        <div className="dashboard-yukleniyor-ikonu">
+          ✨
+        </div>
+
+        <h2>Dashboard hazırlanıyor</h2>
+
+        <p>
+          Güncel destek talepleri getiriliyor...
+        </p>
+
+        <div className="dashboard-yukleme-cubugu">
+          <span></span>
+        </div>
+      </section>
+    );
   }
 
   if (hata) {
-    return <p>Hata: {hata}</p>;
+    return (
+      <section className="dashboard-durum-ekrani">
+        <div className="dashboard-hata-ikonu">
+          ⚠️
+        </div>
+
+        <h2>Bir sorun oluştu</h2>
+        <p>{hata}</p>
+      </section>
+    );
   }
 
   return (
     <section className="dashboard-sayfasi">
-      <div className="dashboard-baslik">
-        <p>Genel Bakış</p>
+      {/* Arka plandaki dekoratif şekiller */}
+      <div className="dashboard-dekor dashboard-dekor-bir"></div>
+      <div className="dashboard-dekor dashboard-dekor-iki"></div>
+      <div className="dashboard-dekor dashboard-dekor-uc"></div>
 
-        <h1>Dashboard</h1>
-
-        <span>
-          Destek taleplerinin güncel durumunu buradan
-          takip edebilirsiniz.
-        </span>
-      </div>
-
-      <div className="dashboard-kartlari">
-        <div
-          className="dashboard-karti"
-          onClick={() => navigate("/talepler")}
-        >
-          <div className="kart-ikon toplam-ikon">📋</div>
-
-          <div>
-            <p>Toplam Talep</p>
-            <h2>{talepler.length}</h2>
-          </div>
+      <header className="dashboard-baslik">
+        <div className="dashboard-baslik-ikonu">
+          ✨
         </div>
 
-        <div
-          className="dashboard-karti"
+        <div>
+          <span className="dashboard-rozet">
+            Akıllı destek merkezi
+          </span>
+
+          <h1>
+            Yönetim
+            <span> Paneli</span>
+          </h1>
+
+          <p>
+            Destek taleplerinin güncel durumunu,
+            yapay zekâ analizlerini ve önemli
+            istatistikleri buradan takip
+            edebilirsiniz.
+          </p>
+        </div>
+      </header>
+
+      <div className="dashboard-kartlari">
+        <article
+          className="dashboard-karti kart-toplam"
+          onClick={() => navigate("/talepler")}
+        >
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon toplam-ikon">
+            📋
+          </div>
+
+          <div className="kart-icerik">
+            <span>Toplam Talep</span>
+            <strong>{talepler.length}</strong>
+            <small>Tüm destek talepleri</small>
+          </div>
+
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-acik"
           onClick={() =>
             navigate("/talepler?durum=acik")
           }
         >
-          <div className="kart-ikon acik-ikon">📨</div>
+          <div className="kart-parilti"></div>
 
-          <div>
-            <p>Açık Talepler</p>
-            <h2>{acikTalepSayisi}</h2>
+          <div className="kart-ikon acik-ikon">
+            📨
           </div>
-        </div>
 
-        <div
-          className="dashboard-karti"
+          <div className="kart-icerik">
+            <span>Açık Talepler</span>
+            <strong>{acikTalepSayisi}</strong>
+            <small>İşlem bekleyen talepler</small>
+          </div>
+
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-bekleyen"
           onClick={() =>
-            navigate("/talepler?durum=onay_bekliyor")
+            navigate(
+              "/talepler?durum=onay_bekliyor"
+            )
           }
         >
+          <div className="kart-parilti"></div>
+
           <div className="kart-ikon bekleyen-ikon">
             ⏳
           </div>
 
-          <div>
-            <p>Onay Bekleyen</p>
-            <h2>{onayBekleyenSayisi}</h2>
+          <div className="kart-icerik">
+            <span>Onay Bekleyen</span>
+            <strong>
+              {onayBekleyenSayisi}
+            </strong>
+            <small>Yönetici onayı gerekli</small>
           </div>
-        </div>
 
-        <div
-          className="dashboard-karti"
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-yanitlanan"
           onClick={() =>
             navigate(
               "/talepler?durum=otomatik_yanitlandi"
             )
           }
         >
+          <div className="kart-parilti"></div>
+
           <div className="kart-ikon yanitlanan-ikon">
             🤖
           </div>
 
-          <div>
-            <p>Otomatik Yanıtlanan</p>
-            <h2>{otomatikYanitlananSayisi}</h2>
+          <div className="kart-icerik">
+            <span>Otomatik Yanıtlanan</span>
+            <strong>
+              {otomatikYanitlananSayisi}
+            </strong>
+            <small>AI tarafından yanıtlandı</small>
           </div>
-        </div>
 
-        <div
-          className="dashboard-karti"
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-kritik"
           onClick={() =>
-            navigate("/talepler?oncelik=acil")
+            navigate(
+              "/talepler?oncelik=kritik"
+            )
           }
         >
-          <div className="kart-ikon bekleyen-ikon">
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon kritik-ikon">
             🚨
           </div>
 
-          <div>
-            <p>Acil Talepler</p>
-            <h2>{acilTalepSayisi}</h2>
+          <div className="kart-icerik">
+            <span>Kritik Talepler</span>
+            <strong>{kritikTalepSayisi}</strong>
+            <small>Acil müdahale gerektiriyor</small>
           </div>
-        </div>
 
-        <div
-          className="dashboard-karti"
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-son-saat"
           onClick={() =>
-            navigate("/talepler?zaman=son24saat")
+            navigate(
+              "/talepler?zaman=son24saat"
+            )
           }
         >
-          <div className="kart-ikon toplam-ikon">
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon saat-ikon">
             🕐
           </div>
 
-          <div>
-            <p>Son 24 Saat</p>
-            <h2>{sonYirmiDortSaatTalepSayisi}</h2>
+          <div className="kart-icerik">
+            <span>Son 24 Saat</span>
+            <strong>
+              {sonYirmiDortSaatTalepSayisi}
+            </strong>
+            <small>Yeni gelen talepler</small>
           </div>
-        </div>
 
-        <div
-          className="dashboard-karti"
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article className="dashboard-karti kart-sure sabit-kart">
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon sure-ikon">
+            ⏱️
+          </div>
+
+          <div className="kart-icerik">
+            <span>Ortalama Yanıt Süresi</span>
+
+            <strong className="uzun-deger">
+              {ortalamaYanitBeklemeSuresi}
+            </strong>
+
+            <small>Ortalama bekleme zamanı</small>
+          </div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-ai"
           onClick={() =>
-            navigate("/talepler?ai_analiz=true")
+            navigate(
+              "/talepler?ai_analiz=true"
+            )
           }
         >
-          <div className="kart-ikon acik-ikon">
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon ai-ikon">
             🧠
           </div>
 
-          <div>
-            <p>AI Analiz Edilen</p>
-            <h2>{aiAnalizEdilenTalepSayisi}</h2>
+          <div className="kart-icerik">
+            <span>AI Analiz Edilen</span>
+            <strong>
+              {aiAnalizEdilenTalepSayisi}
+            </strong>
+            <small>Yapay zekâ analizi tamamlandı</small>
           </div>
-        </div>
+
+          <div className="kart-ok">→</div>
+        </article>
       </div>
 
-      <div className="dashboard-bilgi-karti">
-        <h3>Talep Durumu Özeti</h3>
+      <div className="dashboard-alt-grid">
+        <article className="dashboard-bilgi-karti">
+          <div className="bilgi-karti-baslik">
+            <div className="bilgi-baslik-ikonu durum-ozeti-ikonu">
+              📊
+            </div>
 
-        <div className="durum-satiri">
-          <span>Açık talepler</span>
-          <strong>{acikTalepSayisi}</strong>
-        </div>
+            <div>
+              <span>Güncel durumlar</span>
+              <h3>Talep Durumu Özeti</h3>
+            </div>
+          </div>
 
-        <div className="durum-satiri">
-          <span>Onay bekleyen talepler</span>
-          <strong>{onayBekleyenSayisi}</strong>
-        </div>
-
-        <div className="durum-satiri">
-          <span>Otomatik yanıtlanan talepler</span>
-          <strong>{otomatikYanitlananSayisi}</strong>
-        </div>
-
-        <div className="durum-satiri">
-          <span>Acil talepler</span>
-          <strong>{acilTalepSayisi}</strong>
-        </div>
-
-        <div className="durum-satiri">
-          <span>AI analiz edilen talepler</span>
-          <strong>{aiAnalizEdilenTalepSayisi}</strong>
-        </div>
-      </div>
-
-      <div className="dashboard-bilgi-karti">
-        <h3>Kategori Dağılımı</h3>
-
-        {kategoriDagilimi.length === 0 ? (
-          <p>Henüz kategori bilgisi bulunmuyor.</p>
-        ) : (
-          kategoriDagilimi.map(
-            ([kategoriAdi, talepSayisi]) => (
-              <div
-                className="durum-satiri"
-                key={kategoriAdi}
-              >
-                <span>{kategoriAdi}</span>
-                <strong>{talepSayisi}</strong>
+          <div className="durum-listesi">
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-mavi"></span>
+                Açık talepler
               </div>
-            )
-          )
-        )}
+
+              <strong>{acikTalepSayisi}</strong>
+            </div>
+
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-turuncu"></span>
+                Onay bekleyen talepler
+              </div>
+
+              <strong>
+                {onayBekleyenSayisi}
+              </strong>
+            </div>
+
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-mor"></span>
+                Otomatik yanıtlanan talepler
+              </div>
+
+              <strong>
+                {otomatikYanitlananSayisi}
+              </strong>
+            </div>
+
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-kirmizi"></span>
+                Kritik talepler
+              </div>
+
+              <strong>{kritikTalepSayisi}</strong>
+            </div>
+
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-pembe"></span>
+                Son 24 saatte gelen talepler
+              </div>
+
+              <strong>
+                {sonYirmiDortSaatTalepSayisi}
+              </strong>
+            </div>
+
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-yesil"></span>
+                AI analiz edilen talepler
+              </div>
+
+              <strong>
+                {aiAnalizEdilenTalepSayisi}
+              </strong>
+            </div>
+
+            <div className="durum-satiri">
+              <div>
+                <span className="satir-noktasi nokta-lila"></span>
+                Ortalama yanıt bekleme süresi
+              </div>
+
+              <strong className="sure-rozeti">
+                {ortalamaYanitBeklemeSuresi}
+              </strong>
+            </div>
+          </div>
+        </article>
+
+        <article className="dashboard-bilgi-karti">
+          <div className="bilgi-karti-baslik">
+            <div className="bilgi-baslik-ikonu kategori-ikonu">
+              🗂️
+            </div>
+
+            <div>
+              <span>Talep konuları</span>
+              <h3>Kategori Dağılımı</h3>
+            </div>
+          </div>
+
+          {kategoriDagilimi.length === 0 ? (
+            <div className="kategori-bos-alani">
+              <div>🌸</div>
+
+              <h4>Henüz kategori yok</h4>
+
+              <p>
+                Talepler analiz edildiğinde kategori
+                bilgileri burada görünecek.
+              </p>
+            </div>
+          ) : (
+            <div className="durum-listesi">
+              {kategoriDagilimi.map(
+                (kategori, index) => (
+                  <div
+                    className="durum-satiri kategori-satiri"
+                    key={kategori.kategori}
+                  >
+                    <div>
+                      <span
+                        className={`kategori-numarasi kategori-renk-${
+                          (index % 5) + 1
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+
+                      {kategori.kategori}
+                    </div>
+
+                    <strong>
+                      {kategori.talep_sayisi}
+                    </strong>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </article>
       </div>
     </section>
   );

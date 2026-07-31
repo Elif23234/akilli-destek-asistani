@@ -1,36 +1,66 @@
-import { Routes, Route } from "react-router-dom";
+import {
+  Routes,
+  Route,
+} from "react-router-dom";
 
 import "./styles/Layout.css";
 
-import Header from "./components/Header";
-import Sidebar from "./components/Sidebar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminLayout from "./layouts/AdminLayout";
 
+import AnaSayfa from "./pages/AnaSayfa";
+import AdminGiris from "./pages/AdminGiris";
 import Dashboard from "./pages/Dashboard";
 import TalepListesi from "./pages/TalepListesi";
 import TalepDetay from "./pages/TalepDetay";
+import SikayetFormu from "./pages/SikayetFormu";
 
 function App() {
   return (
-    <div className="app">
-      <Header />
+    <Routes>
+      {/* Ana seçim ekranı */}
+      <Route
+        path="/"
+        element={<AnaSayfa />}
+      />
 
-      <div className="main-layout">
-        <Sidebar />
+      {/* Herkese açık müşteri sayfaları */}
+      <Route
+        path="/destek-talebi"
+        element={<SikayetFormu />}
+      />
 
-        <main className="content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/talepler" element={<TalepListesi />} />
+      <Route
+        path="/sikayet-olustur"
+        element={<SikayetFormu />}
+      />
 
-            <Route
-              path="/talep-detay/:takipNo"
-              element={<TalepDetay />}
-            />
-          </Routes>
-        </main>
-      </div>
-    </div>
+      {/* Yönetici giriş ekranı */}
+      <Route
+        path="/admin-giris"
+        element={<AdminGiris />}
+      />
+
+      {/* Korunan yönetici sayfaları */}
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AdminLayout />}>
+          <Route
+            path="/dashboard"
+            element={<Dashboard />}
+          />
+
+          <Route
+            path="/talepler"
+            element={<TalepListesi />}
+          />
+
+          <Route
+            path="/talep-detay/:takipNo"
+            element={<TalepDetay />}
+          />
+        </Route>
+      </Route>
+    </Routes>
   );
 }
 

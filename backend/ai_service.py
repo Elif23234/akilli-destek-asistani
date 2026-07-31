@@ -54,7 +54,11 @@ def tekrar_eden_talep_kontrol(
     return sonuc > 0
 
 
-def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
+def ai_sonucu_isle(
+    talep_id: str,
+    baslik: str,
+    icerik: str,
+):
     """
     Yapay zeka motorunu arka planda bağımsız bir veritabanı oturumuyla çalıştırır
     ve otomasyon kurallarını tetikler.
@@ -74,7 +78,10 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
         analiz_sonucu = talebi_analiz_et(istek_paketi)
 
         kategori_adi = analiz_sonucu.kategori_adi
+        oncelik_skoru = analiz_sonucu.oncelik_skoru
         oncelik_seviyesi = analiz_sonucu.oncelik_seviyesi
+        duygu_durumu = analiz_sonucu.duygu_durumu
+        oncelik_gerekcesi = analiz_sonucu.oncelik_gerekcesi
         guven_skoru = analiz_sonucu.guven_skoru
         cozum_onerisi = analiz_sonucu.cozum_onerisi
         onerilen_cevap = analiz_sonucu.onerilen_cevap
@@ -114,6 +121,10 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
             INSERT INTO yz_analizleri (
                 yz_talep_id,
                 yz_ozet,
+                yz_oncelik_skoru,
+                yz_oncelik_seviyesi,
+                yz_duygu_durumu,
+                yz_oncelik_gerekcesi,
                 yz_guven_skoru,
                 yz_cozum_onerisi,
                 yz_musteri_cevabi
@@ -121,12 +132,20 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
             VALUES (
                 :talep_id,
                 :ozet,
+                :oncelik_skoru,
+                :oncelik_seviyesi,
+                :duygu_durumu,
+                :oncelik_gerekcesi,
                 :guven_skoru,
                 :cozum_onerisi,
                 :onerilen_cevap
             )
             ON CONFLICT (yz_talep_id) DO UPDATE
             SET yz_ozet = EXCLUDED.yz_ozet,
+                yz_oncelik_skoru = EXCLUDED.yz_oncelik_skoru,
+                yz_oncelik_seviyesi = EXCLUDED.yz_oncelik_seviyesi,
+                yz_duygu_durumu = EXCLUDED.yz_duygu_durumu,
+                yz_oncelik_gerekcesi = EXCLUDED.yz_oncelik_gerekcesi,
                 yz_guven_skoru = EXCLUDED.yz_guven_skoru,
                 yz_cozum_onerisi = EXCLUDED.yz_cozum_onerisi,
                 yz_musteri_cevabi = EXCLUDED.yz_musteri_cevabi
@@ -137,6 +156,10 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
             {
                 "talep_id": talep_id,
                 "ozet": analiz_sonucu.ozet,
+                "oncelik_skoru": oncelik_skoru,
+                "oncelik_seviyesi": oncelik_seviyesi,
+                "duygu_durumu": duygu_durumu,
+                "oncelik_gerekcesi": oncelik_gerekcesi,
                 "guven_skoru": guven_skoru,
                 "cozum_onerisi": cozum_onerisi,
                 "onerilen_cevap": onerilen_cevap,
@@ -156,67 +179,129 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
         """)
 
         # Kritik talepler için Telegram bildirimi
+                # Kritik talepler için Telegram bildirimi
         if oncelik_seviyesi == "Kritik":
-            bildirim_hash = bildirim_hash_olustur(talep_id)
+            try:
+                bildirim_hash = bildirim_hash_olustur(talep_id)
 
-            kontrol_sorgu = text("""
-                SELECT 1
-                FROM bildirim_kayitlari
-                WHERE bildirim_hash = :hash
-            """)
+                # Talebin takip numarasını ve bildirim durumunu getir.
+                # FOR UPDATE, aynı talebin eş zamanlı olarak iki kez
+                # bildirilmesini engellemeye yardımcı olur.
+                bildirim_kontrol_sorgu = text("""
+                    SELECT
+                        talep_takip_no,
+                        COALESCE(talep_bildirildi, FALSE)
+                            AS talep_bildirildi
+                    FROM talepler
+                    WHERE talep_id = :talep_id
+                    FOR UPDATE
+                """)
 
-            daha_once_gonderildi = db.execute(
-                kontrol_sorgu,
-                {"hash": bildirim_hash},
-            ).scalar()
+                bildirim_kontrol = db.execute(
+                    bildirim_kontrol_sorgu,
+                    {"talep_id": talep_id},
+                ).first()
 
-            if not daha_once_gonderildi:
-                try:
-                    takip_no_sorgu = text("""
-                        SELECT talep_takip_no
-                        FROM talepler
-                        WHERE talep_id = :talep_id
+                if bildirim_kontrol:
+                    talep_takip_no = bildirim_kontrol.talep_takip_no
+                    talep_bildirildi = bildirim_kontrol.talep_bildirildi
+
+                    # Eski bildirim kayıtlarında hash var mı kontrol et.
+                    hash_kontrol_sorgu = text("""
+                        SELECT 1
+                        FROM bildirim_kayitlari
+                        WHERE bildirim_hash = :hash
                     """)
 
-                    talep_takip_no = db.execute(
-                        takip_no_sorgu,
-                        {"talep_id": talep_id},
+                    hash_kaydi_var = db.execute(
+                        hash_kontrol_sorgu,
+                        {"hash": bildirim_hash},
                     ).scalar()
 
-                    basarili = telegram_mesaji_gonder(
-                        talep_id,
-                        talep_takip_no,
-                        baslik,
-                        oncelik_seviyesi,
-                    )
+                    if talep_bildirildi:
+                        print(
+                            "Telegram bildirimi daha önce gönderilmiş: "
+                            f"{talep_takip_no}"
+                        )
 
-                    if basarili:
-                        kayit_sorgu = text("""
-                            INSERT INTO bildirim_kayitlari (
-                                bildirim_talep_id,
-                                bildirim_kanal,
-                                bildirim_hash,
-                                bildirim_durum
-                            )
-                            VALUES (
-                                :talep_id,
-                                'telegram',
-                                :hash,
-                                'gonderildi'
-                            )
+                    elif hash_kaydi_var:
+                        # Eski sistemde bildirim gönderilmiş ancak
+                        # talep_bildirildi alanı güncellenmemiş olabilir.
+                        bildirildi_guncelle_sorgu = text("""
+                            UPDATE talepler
+                            SET talep_bildirildi = TRUE
+                            WHERE talep_id = :talep_id
                         """)
 
                         db.execute(
-                            kayit_sorgu,
-                            {
-                                "talep_id": talep_id,
-                                "hash": bildirim_hash,
-                            },
+                            bildirildi_guncelle_sorgu,
+                            {"talep_id": talep_id},
                         )
 
-                except Exception as e:
-                    print(f"Telegram bildirimi hatası: {e}")
+                        print(
+                            "Eski bildirim kaydı bulundu. "
+                            "Tekrar Telegram mesajı gönderilmedi: "
+                            f"{talep_takip_no}"
+                        )
 
+                    else:
+                        basarili = telegram_mesaji_gonder(
+                            talep_id,
+                            talep_takip_no,
+                            baslik,
+                            oncelik_seviyesi,
+                        )
+
+                        if basarili:
+                            # Telegram başarılıysa talebi bildirildi yap.
+                            bildirildi_guncelle_sorgu = text("""
+                                UPDATE talepler
+                                SET talep_bildirildi = TRUE
+                                WHERE talep_id = :talep_id
+                            """)
+
+                            db.execute(
+                                bildirildi_guncelle_sorgu,
+                                {"talep_id": talep_id},
+                            )
+
+                            # Bildirim geçmişini kaydet.
+                            kayit_sorgu = text("""
+                                INSERT INTO bildirim_kayitlari (
+                                    bildirim_talep_id,
+                                    bildirim_kanal,
+                                    bildirim_hash,
+                                    bildirim_durum
+                                )
+                                VALUES (
+                                    :talep_id,
+                                    'telegram',
+                                    :hash,
+                                    'gonderildi'
+                                )
+                            """)
+
+                            db.execute(
+                                kayit_sorgu,
+                                {
+                                    "talep_id": talep_id,
+                                    "hash": bildirim_hash,
+                                },
+                            )
+
+                            print(
+                                "Telegram bildirimi gönderildi: "
+                                f"{talep_takip_no}"
+                            )
+
+                        else:
+                            print(
+                                "Telegram bildirimi gönderilemedi. "
+                                "talep_bildirildi değeri FALSE kaldı."
+                            )
+
+            except Exception as e:
+                print(f"Telegram bildirimi hatası: {e}")
         db.execute(
             yorum_sorgu,
             {
@@ -231,8 +316,14 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
         db.commit()
 
         return {
-            "mesaj": "YZ analizi başarıyla tamamlandı ve veritabanına işlendi.",
+            "mesaj": (
+                "YZ analizi başarıyla tamamlandı "
+                "ve veritabanına işlendi."
+            ),
             "kategori_id": kategori_id,
+            "oncelik_skoru": oncelik_skoru,
+            "oncelik_seviyesi": oncelik_seviyesi,
+            "duygu_durumu": duygu_durumu,
             "guven_skoru": guven_skoru,
             "cozum_onerisi": cozum_onerisi,
             "onerilen_cevap": onerilen_cevap,
@@ -252,7 +343,9 @@ def ai_sonucu_isle(talep_id: str, baslik: str, icerik: str):
 
             db.execute(
                 hata_sorgu,
-                {"talep_id": talep_id},
+                {
+                    "talep_id": talep_id,
+                },
             )
 
             # Hatayı yorumlara da ekleyelim ki personel bilsin
@@ -294,4 +387,8 @@ def talep_analiz_et_ve_uygula(
     baslik: str,
     icerik: str,
 ):
-    ai_sonucu_isle(talep_id, baslik, icerik)
+    return ai_sonucu_isle(
+        talep_id,
+        baslik,
+        icerik,
+    )

@@ -29,6 +29,8 @@ class AnalizSonucu(BaseModel):
 
     duygu_durumu: str
 
+    oncelik_gerekcesi: str
+
     guven_skoru: float = Field(
         ge=0,
         le=1

@@ -1,0 +1,94 @@
+.admin-giris-sayfasi {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f3f6fb;
+}
+
+.admin-giris-karti {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 35px
+    rgba(15, 23, 42, 0.12);
+}
+
+.admin-giris-baslik {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.admin-giris-baslik h1 {
+  margin: 0 0 10px;
+  color: #1e293b;
+  font-size: 28px;
+}
+
+.admin-giris-baslik p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.admin-giris-formu {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-giris-alani {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-giris-alani label {
+  color: #334155;
+  font-weight: 600;
+}
+
+.admin-giris-alani input {
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+}
+
+.admin-giris-alani input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px
+    rgba(37, 99, 235, 0.12);
+}
+
+.admin-giris-formu button {
+  padding: 13px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-giris-formu button:hover {
+  background: #1d4ed8;
+}
+
+.admin-giris-formu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.admin-giris-hata {
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 14px;
+}

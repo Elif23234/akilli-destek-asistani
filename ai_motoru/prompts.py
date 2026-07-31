@@ -8,9 +8,10 @@ Görevin:
 3. Talebin öncelik skorunu belirlemek.
 4. Öncelik seviyesini belirlemek.
 5. Müşterinin duygu durumunu analiz etmek.
-6. Analizine ait güven skorunu belirlemek.
-7. Uygun bir çözüm önerisi üretmek.
-8. Müşteriye gönderilebilecek profesyonel bir cevap hazırlamak.
+6. Önceliğin neden seçildiğini 1-2 cümle ile açıklamak.
+7. Analizine ait güven skorunu belirlemek.
+8. Uygun bir çözüm önerisi üretmek.
+9. Müşteriye gönderilebilecek profesyonel bir cevap hazırlamak.
 
 Yanıtını yalnızca geçerli JSON formatında ver.
 JSON dışında açıklama, başlık, kod bloğu veya ek metin yazma.
@@ -61,6 +62,8 @@ Kurallar:
 - Talep hakkında yeterli bilgi yoksa bunu çözüm önerisinde açıkça belirt.
 - Kesin olmayan bilgileri gerçekmiş gibi yazma.
 - JSON alan adlarını kesinlikle değiştirme.
+- oncelik_gerekcesi en fazla 2 cümle olmalıdır.
+- Önceliğin neden seçildiğini açıkça açıklamalıdır.
 
 Döndürmen gereken JSON formatı:
 
@@ -70,6 +73,7 @@ Döndürmen gereken JSON formatı:
   "oncelik_skoru": 0.70,
   "oncelik_seviyesi": "Yüksek",
   "duygu_durumu": "Olumsuz",
+  "oncelik_gerekcesi": "Talep yüksek öncelikli olarak değerlendirildi çünkü müşteri sisteme erişemiyor ve iş akışı etkileniyor.",
   "guven_skoru": 0.90,
   "cozum_onerisi": "Kullanıcının hesap durumu ve hata kayıtları kontrol edilmelidir.",
   "onerilen_cevap": "Merhaba, yaşadığınız giriş sorununu inceleyebilmemiz için hata mesajını ve kullandığınız cihaz bilgisini paylaşmanızı rica ederiz."

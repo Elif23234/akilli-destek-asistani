@@ -109,3 +109,52 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+.ai-analiz-karti {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+}
+
+.ai-analiz-alani {
+  margin-bottom: 20px;
+}
+
+.ai-analiz-baslik {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.oncelik-gerekcesi {
+  background: #f5f5f5;
+  padding: 12px;
+  border-left: 5px solid #dc3545;
+  border-radius: 6px;
+  line-height: 1.6;
+}
+
+.oncelik-kritik {
+  background: #dc3545;
+  color: white;
+}
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  max-width: none;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}

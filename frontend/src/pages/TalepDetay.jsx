@@ -3,10 +3,13 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
+
 import {
   getBenzerTalepler,
   getTalepDetayi,
 } from "../services/api";
+
+import "./TalepDetay.css";
 
 function TalepDetay() {
   const { takipNo } = useParams();
@@ -156,6 +159,10 @@ function TalepDetay() {
       return "oncelik-etiketi oncelik-yuksek";
     }
 
+    if (temizOncelik === "kritik") {
+      return "oncelik-etiketi oncelik-kritik";
+    }
+
     return "oncelik-etiketi oncelik-belirsiz";
   }
 
@@ -181,12 +188,99 @@ function TalepDetay() {
       return "Yüksek";
     }
 
+    if (temizOncelik === "kritik") {
+      return "Kritik";
+    }
+
+    return "Belirtilmemiş";
+  }
+
+  function duyguSinifi(duygu) {
+    const temizDuygu = duygu
+      ?.toLocaleLowerCase("tr-TR")
+      .trim();
+
+    if (
+      temizDuygu === "olumlu" ||
+      temizDuygu === "pozitif" ||
+      temizDuygu === "çok olumlu"
+    ) {
+      return "duygu-etiketi duygu-olumlu";
+    }
+
+    if (
+      temizDuygu === "olumsuz" ||
+      temizDuygu === "negatif" ||
+      temizDuygu === "çok olumsuz"
+    ) {
+      return "duygu-etiketi duygu-olumsuz";
+    }
+
+    if (
+      temizDuygu === "nötr" ||
+      temizDuygu === "notr"
+    ) {
+      return "duygu-etiketi duygu-notr";
+    }
+
+    if (
+      temizDuygu === "karışık" ||
+      temizDuygu === "karisik"
+    ) {
+      return "duygu-etiketi duygu-karisik";
+    }
+
+    return "duygu-etiketi duygu-belirsiz";
+  }
+
+  function duyguMetni(duygu) {
+    const temizDuygu = duygu
+      ?.toLocaleLowerCase("tr-TR")
+      .trim();
+
+    if (temizDuygu === "çok olumlu") {
+      return "Çok Olumlu";
+    }
+
+    if (
+      temizDuygu === "olumlu" ||
+      temizDuygu === "pozitif"
+    ) {
+      return "Olumlu";
+    }
+
+    if (temizDuygu === "çok olumsuz") {
+      return "Çok Olumsuz";
+    }
+
+    if (
+      temizDuygu === "olumsuz" ||
+      temizDuygu === "negatif"
+    ) {
+      return "Olumsuz";
+    }
+
+    if (
+      temizDuygu === "nötr" ||
+      temizDuygu === "notr"
+    ) {
+      return "Nötr";
+    }
+
+    if (
+      temizDuygu === "karışık" ||
+      temizDuygu === "karisik"
+    ) {
+      return "Karışık";
+    }
+
     return "Belirtilmemiş";
   }
 
   function durumMetni(durum) {
     const temizDurum =
-      durum?.toLowerCase();
+      durum?.toLocaleLowerCase("tr-TR")
+        .trim();
 
     if (
       temizDurum === "acik" ||
@@ -202,9 +296,7 @@ function TalepDetay() {
       return "Kapalı";
     }
 
-    if (
-      temizDurum === "beklemede"
-    ) {
+    if (temizDurum === "beklemede") {
       return "Beklemede";
     }
 
@@ -221,9 +313,74 @@ function TalepDetay() {
       return "Otomatik Yanıtlandı";
     }
 
-    return (
-      durum || "Belirtilmemiş"
-    );
+    if (
+      temizDurum === "inceleniyor"
+    ) {
+      return "İnceleniyor";
+    }
+
+    if (
+      temizDurum ===
+      "musteri_bekleniyor"
+    ) {
+      return "Müşteri Bekleniyor";
+    }
+
+    return durum || "Belirtilmemiş";
+  }
+
+  function durumSinifi(durum) {
+    const temizDurum =
+      durum?.toLocaleLowerCase("tr-TR")
+        .trim();
+
+    if (
+      temizDurum === "acik" ||
+      temizDurum === "açık"
+    ) {
+      return "durum-acik";
+    }
+
+    if (
+      temizDurum === "kapali" ||
+      temizDurum === "kapalı"
+    ) {
+      return "durum-kapali";
+    }
+
+    if (
+      temizDurum === "beklemede"
+    ) {
+      return "durum-beklemede";
+    }
+
+    if (
+      temizDurum === "onay_bekliyor"
+    ) {
+      return "durum-onay-bekliyor";
+    }
+
+    if (
+      temizDurum ===
+      "otomatik_yanitlandi"
+    ) {
+      return "durum-otomatik-yanitlandi";
+    }
+
+    if (
+      temizDurum === "inceleniyor"
+    ) {
+      return "durum-inceleniyor";
+    }
+
+    if (
+      temizDurum ===
+      "musteri_bekleniyor"
+    ) {
+      return "durum-musteri-bekleniyor";
+    }
+
+    return "durum-belirsiz";
   }
 
   function benzerTalepDetayinaGit(
@@ -242,18 +399,74 @@ function TalepDetay() {
 
   if (yukleniyor) {
     return (
-      <p>
-        Talep detayı yükleniyor...
-      </p>
+      <section className="talep-detay-durum-sayfasi">
+        <div className="talep-detay-durum-karti">
+          <div className="yukleniyor-simgesi">
+            ✨
+          </div>
+
+          <h2>Talep yükleniyor</h2>
+
+          <p>
+            Talep bilgileri ve yapay zekâ
+            analizleri hazırlanıyor.
+          </p>
+        </div>
+      </section>
     );
   }
 
   if (hata) {
-    return <p>Hata: {hata}</p>;
+    return (
+      <section className="talep-detay-durum-sayfasi">
+        <div className="talep-detay-durum-karti hata-karti">
+          <div className="yukleniyor-simgesi">
+            ⚠️
+          </div>
+
+          <h2>Talep yüklenemedi</h2>
+
+          <p>{hata}</p>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/talepler")
+            }
+          >
+            Talep listesine dön
+          </button>
+        </div>
+      </section>
+    );
   }
 
   if (!talep) {
-    return <p>Talep bulunamadı.</p>;
+    return (
+      <section className="talep-detay-durum-sayfasi">
+        <div className="talep-detay-durum-karti">
+          <div className="yukleniyor-simgesi">
+            🔎
+          </div>
+
+          <h2>Talep bulunamadı</h2>
+
+          <p>
+            Bu takip numarasına ait bir
+            talep kaydı bulunmuyor.
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/talepler")
+            }
+          >
+            Talep listesine dön
+          </button>
+        </div>
+      </section>
+    );
   }
 
   const aiOzeti =
@@ -270,148 +483,357 @@ function TalepDetay() {
     talep.yz_oncelik_seviyesi ||
     talep.oncelik;
 
+  const oncelikGerekcesi =
+    talep.yz_oncelik_gerekcesi ||
+    talep.oncelik_gerekcesi;
+
+  const duygu =
+    talep.yz_duygu_durumu ||
+    talep.duygu_durumu ||
+    talep.duygu;
+
   return (
-    <section>
-      <button
-        type="button"
-        onClick={() =>
-          navigate("/talepler")
-        }
-      >
-        ← Talep listesine dön
-      </button>
-
-      <h2>Talep Detayı</h2>
-
-      <p>
-        <strong>Takip No:</strong>{" "}
-        {talep.talep_takip_no}
-      </p>
-
-      <p>
-        <strong>Başlık:</strong>{" "}
-        {talep.talep_baslik ||
-          "Başlık bulunmuyor"}
-      </p>
-
-      <p>
-        <strong>İçerik:</strong>{" "}
-        {talep.talep_ham_icerik ||
-          "Talep içeriği bulunmuyor"}
-      </p>
-
-      <p>
-        <strong>Durum:</strong>{" "}
-        {durumMetni(
-          talep.talep_durum
-        )}
-      </p>
-
-      <p>
-        <strong>Gönderen:</strong>{" "}
-        {talep.talep_gonderen_ad_soyad ||
-          "Belirtilmemiş"}
-      </p>
-
-      <p>
-        <strong>E-posta:</strong>{" "}
-        {talep.talep_gonderen_eposta ||
-          "Belirtilmemiş"}
-      </p>
-
-      <p>
-        <strong>Kaynak:</strong>{" "}
-        {talep.talep_kaynak ||
-          "Belirtilmemiş"}
-      </p>
-
-      <hr />
-
-      <h3>AI Analizi</h3>
-
-      <p>
-        <strong>AI Özeti:</strong>{" "}
-        {aiOzeti ||
-          "Bu talep için henüz AI özeti oluşturulmamış."}
-      </p>
-
-      <p>
-        <strong>Kategori:</strong>{" "}
-        {kategori ||
-          "Belirtilmemiş"}
-      </p>
-
-      <p>
-        <strong>Öncelik:</strong>{" "}
-        <span
-          className={oncelikSinifi(
-            oncelik
-          )}
-        >
-          {oncelikMetni(oncelik)}
-        </span>
-      </p>
-
-      <hr />
-
-      <h3>Benzer Talepler</h3>
-
-      {benzerlerYukleniyor ? (
-        <p>
-          Benzer talepler aranıyor...
-        </p>
-      ) : benzerTalepHatasi ? (
-        <p>
-          Hata: {benzerTalepHatasi}
-        </p>
-      ) : benzerTalepler.length ===
-        0 ? (
-        <p>
-          Bu taleple benzer bir kayıt
-          bulunamadı.
-        </p>
-      ) : (
-        <div>
-          {benzerTalepler.map(
-            (benzerTalep, index) => {
-              const benzerTakipNo =
-                benzerTalep.talep_takip_no ||
-                benzerTalep.takip_no;
-
-              const benzerBaslik =
-                benzerTalep.talep_baslik ||
-                benzerTalep.baslik ||
-                "Başlık bulunmuyor";
-
-              return (
-                <div
-                  key={
-                    benzerTalep.talep_id ||
-                    benzerTakipNo ||
-                    index
-                  }
-                >
-                  <button
-                    type="button"
-                    disabled={
-                      !benzerTakipNo
-                    }
-                    onClick={() =>
-                      benzerTalepDetayinaGit(
-                        benzerTakipNo
-                      )
-                    }
-                  >
-                    {benzerTakipNo ||
-                      "Takip numarası yok"}{" "}
-                    - {benzerBaslik}
-                  </button>
-                </div>
-              );
+    <section className="talep-detay-sayfasi">
+      <div className="talep-detay-icerik">
+        <div className="talep-detay-ust-satir">
+          <button
+            type="button"
+            className="geri-don-butonu"
+            onClick={() =>
+              navigate("/talepler")
             }
-          )}
+          >
+            <span>←</span>
+            Talep listesine dön
+          </button>
+
+          <span className="detay-sayfa-etiketi">
+            Talep yönetimi
+          </span>
         </div>
-      )}
+
+        <header className="talep-detay-hero">
+          <div className="talep-detay-hero-sol">
+            <div className="talep-detay-hero-ikon">
+              📬
+            </div>
+
+            <div>
+              <span className="talep-detay-kucuk-baslik">
+                Müşteri destek kaydı
+              </span>
+
+              <h1>Talep Detayı</h1>
+
+              <p>
+                Talebin orijinal içeriğini,
+                yapay zekâ analizini ve benzer
+                talepleri tek ekranda
+                inceleyebilirsiniz.
+              </p>
+            </div>
+          </div>
+
+          <div className="talep-detay-hero-sag">
+            <span
+              className={`detay-durum-etiketi ${durumSinifi(
+                talep.talep_durum
+              )}`}
+            >
+              {durumMetni(
+                talep.talep_durum
+              )}
+            </span>
+
+            <span className="detay-takip-basligi">
+              Takip numarası
+            </span>
+
+            <strong className="detay-takip-no">
+              {talep.talep_takip_no}
+            </strong>
+          </div>
+        </header>
+
+        <div className="talep-detay-grid">
+          <article className="detay-karti orijinal-talep-karti">
+            <div className="detay-kart-basligi">
+              <div className="detay-kart-ikon pembe-ikon">
+                📩
+              </div>
+
+              <div>
+                <span>Müşteri mesajı</span>
+                <h2>Orijinal Talep</h2>
+              </div>
+            </div>
+
+            <div className="talep-bilgi-grid">
+              <div className="talep-bilgi-alani">
+                <span className="talep-bilgi-baslik">
+                  Takip No
+                </span>
+
+                <p>
+                  {talep.talep_takip_no}
+                </p>
+              </div>
+
+              <div className="talep-bilgi-alani">
+                <span className="talep-bilgi-baslik">
+                  Durum
+                </span>
+
+                <p>
+                  <span
+                    className={`detay-durum-etiketi kucuk-durum ${durumSinifi(
+                      talep.talep_durum
+                    )}`}
+                  >
+                    {durumMetni(
+                      talep.talep_durum
+                    )}
+                  </span>
+                </p>
+              </div>
+
+              <div className="talep-bilgi-alani">
+                <span className="talep-bilgi-baslik">
+                  Gönderen
+                </span>
+
+                <p>
+                  {talep.talep_gonderen_ad_soyad ||
+                    "Belirtilmemiş"}
+                </p>
+              </div>
+
+              <div className="talep-bilgi-alani">
+                <span className="talep-bilgi-baslik">
+                  E-posta
+                </span>
+
+                <p className="eposta-metni">
+                  {talep.talep_gonderen_eposta ||
+                    "Belirtilmemiş"}
+                </p>
+              </div>
+
+              <div className="talep-bilgi-alani">
+                <span className="talep-bilgi-baslik">
+                  Kaynak
+                </span>
+
+                <p>
+                  {talep.talep_kaynak ||
+                    "Belirtilmemiş"}
+                </p>
+              </div>
+            </div>
+
+            <div className="talep-metin-alani">
+              <span className="talep-bilgi-baslik">
+                Başlık
+              </span>
+
+              <p className="talep-detay-basligi">
+                {talep.talep_baslik ||
+                  "Başlık bulunmuyor"}
+              </p>
+            </div>
+
+            <div className="talep-metin-alani talep-icerik-kutusu">
+              <span className="talep-bilgi-baslik">
+                Talep İçeriği
+              </span>
+
+              <p>
+                {talep.talep_ham_icerik ||
+                  "Talep içeriği bulunmuyor"}
+              </p>
+            </div>
+          </article>
+
+          <article className="detay-karti ai-analiz-karti">
+            <div className="detay-kart-basligi">
+              <div className="detay-kart-ikon mor-ikon">
+                🤖
+              </div>
+
+              <div>
+                <span>Yapay zekâ sonucu</span>
+                <h2>AI Analizi</h2>
+              </div>
+            </div>
+
+            <div className="ai-ozet-kutusu">
+              <span className="ai-analiz-baslik">
+                AI Özeti
+              </span>
+
+              <p>
+                {aiOzeti ||
+                  "Bu talep için henüz AI özeti oluşturulmamış."}
+              </p>
+            </div>
+
+            <div className="ai-metrik-grid">
+              <div className="ai-metrik-karti">
+                <span>Kategori</span>
+
+                <strong>
+                  {kategori ||
+                    "Belirtilmemiş"}
+                </strong>
+              </div>
+
+              <div className="ai-metrik-karti">
+                <span>Öncelik</span>
+
+                <strong>
+                  <span
+                    className={oncelikSinifi(
+                      oncelik
+                    )}
+                  >
+                    {oncelikMetni(
+                      oncelik
+                    )}
+                  </span>
+                </strong>
+              </div>
+
+              <div className="ai-metrik-karti">
+                <span>Duygu Durumu</span>
+
+                <strong>
+                  <span
+                    className={duyguSinifi(
+                      duygu
+                    )}
+                  >
+                    {duyguMetni(duygu)}
+                  </span>
+                </strong>
+              </div>
+            </div>
+
+            <div className="oncelik-gerekcesi-kutusu">
+              <div className="gerekce-baslik">
+                <span>💡</span>
+
+                <strong>
+                  Öncelik Gerekçesi
+                </strong>
+              </div>
+
+              <p className="oncelik-gerekcesi">
+                {oncelikGerekcesi ||
+                  "Bu talep için henüz öncelik gerekçesi oluşturulmamış."}
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <section className="detay-karti benzer-talepler-bolumu">
+          <div className="benzer-talepler-basligi">
+            <div className="detay-kart-basligi">
+              <div className="detay-kart-ikon mavi-ikon">
+                🔎
+              </div>
+
+              <div>
+                <span>RAG benzerlik araması</span>
+                <h2>Benzer Talepler</h2>
+              </div>
+            </div>
+
+            <p>
+              Mevcut talebe içerik bakımından
+              benzeyen önceki kayıtlar.
+            </p>
+          </div>
+
+          {benzerlerYukleniyor ? (
+            <div className="benzer-talep-mesaji">
+              <span>✨</span>
+
+              <p>
+                Benzer talepler aranıyor...
+              </p>
+            </div>
+          ) : benzerTalepHatasi ? (
+            <div className="benzer-talep-mesaji hata-mesaji">
+              <span>⚠️</span>
+
+              <p>
+                {benzerTalepHatasi}
+              </p>
+            </div>
+          ) : benzerTalepler.length === 0 ? (
+            <div className="benzer-talep-mesaji">
+              <span>📭</span>
+
+              <p>
+                Bu taleple benzer bir kayıt
+                bulunamadı.
+              </p>
+            </div>
+          ) : (
+            <div className="benzer-talepler-listesi">
+              {benzerTalepler.map(
+                (benzerTalep, index) => {
+                  const benzerTakipNo =
+                    benzerTalep.talep_takip_no ||
+                    benzerTalep.takip_no;
+
+                  const benzerBaslik =
+                    benzerTalep.talep_baslik ||
+                    benzerTalep.baslik ||
+                    "Başlık bulunmuyor";
+
+                  return (
+                    <button
+                      key={
+                        benzerTalep.talep_id ||
+                        benzerTakipNo ||
+                        index
+                      }
+                      type="button"
+                      className="benzer-talep-butonu"
+                      disabled={!benzerTakipNo}
+                      onClick={() =>
+                        benzerTalepDetayinaGit(
+                          benzerTakipNo
+                        )
+                      }
+                    >
+                      <span className="benzer-talep-ikon">
+                        📄
+                      </span>
+
+                      <span className="benzer-talep-metin">
+                        <strong>
+                          {benzerTakipNo ||
+                            "Takip numarası yok"}
+                        </strong>
+
+                        <small>
+                          {benzerBaslik}
+                        </small>
+                      </span>
+
+                      <span className="benzer-talep-ok">
+                        →
+                      </span>
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          )}
+        </section>
+      </div>
     </section>
   );
 }

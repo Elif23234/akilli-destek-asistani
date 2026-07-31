@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks,Depends
 from pydantic import BaseModel
 from typing import Optional
 from database import SessionLocal
@@ -6,6 +6,11 @@ from sqlalchemy import text
 from ai_service import talep_analiz_et_ve_uygula, tekrar_eden_talep_kontrol
 from ai_motoru.embedding import embedding_olustur
 from fastapi.middleware.cors import CORSMiddleware
+from security import (
+    admin_bilgilerini_dogrula,
+    admin_token_olustur,
+    admin_token_dogrula,
+)
 
 app = FastAPI(title="Akıllı Destek Asistanı API")
 
@@ -24,6 +29,9 @@ class YeniTalep(BaseModel):
     baslik: str
     icerik: str
     kaynak: str = "web"
+class AdminGiris(BaseModel):
+    kullanici_adi: str
+    sifre: str
 class YeniYorum(BaseModel):
     talep_id: str
     kullanici_id: Optional[str] = None 
@@ -56,16 +64,102 @@ class TalepYonlendirme(BaseModel):
 @app.get("/")
 def read_root():
     return {"mesaj": "Akıllı Destek Asistanı backend sistemi başarıyla çalışıyor!"}
+@app.post("/admin/giris", tags=["Admin"])
+def admin_girisi(giris: AdminGiris):
+    giris_basarili = admin_bilgilerini_dogrula(
+        giris.kullanici_adi,
+        giris.sifre,
+    )
+
+    if not giris_basarili:
+        raise HTTPException(
+            status_code=401,
+            detail="Kullanıcı adı veya şifre hatalı.",
+        )
+
+    token = admin_token_olustur(
+        giris.kullanici_adi
+    )
+
+    return {
+        "mesaj": "Yönetici girişi başarılı.",
+        "access_token": token,
+        "token_type": "bearer",
+    }
+
+
+@app.get("/admin/token-kontrol", tags=["Admin"])
+def admin_token_kontrol(
+    kullanici_adi: str = Depends(admin_token_dogrula),
+):
+    return {
+        "mesaj": "Yönetici tokenı geçerli.",
+        "kullanici_adi": kullanici_adi,
+    }
 
 # 2. Yönetim Paneli - Dashboard Özeti (GET)
-@app.get("/talepler" , tags=["Talepler"])
+@app.get("/talepler", tags=["Talepler"])
 def talepleri_getir():
     db = SessionLocal()
+
     try:
-        sorgu = text("SELECT * FROM talepler ORDER BY talep_takip_no DESC LIMIT 50;")
+        sorgu = text("""
+            SELECT
+                t.talep_id,
+                t.talep_takip_no,
+                t.talep_baslik,
+                t.talep_ham_icerik,
+                t.talep_durum,
+                t.talep_kaynak,
+                t.talep_gonderen_ad_soyad,
+                t.talep_gonderen_eposta,
+                t.talep_kullanici_id,
+                t.talep_kategori_id,
+                t.talep_bildirildi,
+
+                k.kategori_ad,
+                k.kategori_departman,
+
+                yz.yz_ozet,
+                yz.yz_oncelik_seviyesi,
+                yz.yz_oncelik_gerekcesi,
+                yz.yz_duygu_durumu,
+                yz.yz_guven_skoru,
+                yz.yz_cozum_onerisi,
+                t.talep_olusturulma_tarihi,
+                t.talep_guncellenme_tarihi
+
+            FROM talepler t
+
+            LEFT JOIN kategoriler k
+                ON t.talep_kategori_id = k.kategori_id
+
+            LEFT JOIN yz_analizleri yz
+                ON t.talep_id = yz.yz_talep_id
+
+            ORDER BY t.talep_olusturulma_tarihi DESC
+
+            LIMIT 100;
+        """)
+
         sonuc = db.execute(sorgu)
-        talepler = [dict(satir._mapping) for satir in sonuc]
-        return {"mesaj": "Talepler başarıyla getirildi", "veri": talepler}
+
+        talepler = [
+            dict(satir._mapping)
+            for satir in sonuc
+        ]
+
+        return {
+            "mesaj": "Talepler başarıyla getirildi",
+            "veri": talepler
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Talepler getirilirken hata oluştu: {str(e)}"
+        )
+
     finally:
         db.close()
 
@@ -286,8 +380,7 @@ def talep_durum_guncelle(guncelleme: DurumGuncelleme):
 def ai_talep_analiz_ve_kaydet(talep_id: str, baslik: str, icerik: str):
     db = SessionLocal()
     try:
-        sonuc = talep_analiz_et_ve_uygula(db, talep_id, baslik, icerik)
-        db.commit()
+        sonuc = talep_analiz_et_ve_uygula( talep_id, baslik, icerik)
 
         return {
             "mesaj": sonuc["mesaj"],
@@ -510,6 +603,110 @@ def tum_kategorileri_getir():
         return {"mesaj": "Kategori listesi başarıyla getirildi.", "veri": kategoriler}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Kategoriler çekilirken hata: {str(e)}")
+    finally:
+        db.close()
+# 19. Dashboard İstatistikleri (GET)
+@app.get("/dashboard/istatistikler", tags=["Dashboard"])
+def dashboard_istatistikleri():
+    db = SessionLocal()
+
+    try:
+        # 1. Son 24 saatte gelen talep sayısı
+        son_24_saat_sorgu = text("""
+            SELECT COUNT(*) AS talep_sayisi
+            FROM talepler
+            WHERE talep_olusturulma_tarihi >= NOW() - INTERVAL '24 hours';
+        """)
+
+        son_24_saat_sonuc = db.execute(son_24_saat_sorgu).scalar()
+        son_24_saat_talep_sayisi = son_24_saat_sonuc or 0
+
+        # 2. Kritik talep sayısı
+        kritik_sorgu = text("""
+            SELECT COUNT(*) AS kritik_talep_sayisi
+            FROM yz_analizleri
+            WHERE LOWER(yz_oncelik_seviyesi) = 'kritik';
+        """)
+
+        kritik_sonuc = db.execute(kritik_sorgu).scalar()
+        kritik_talep_sayisi = kritik_sonuc or 0
+
+        # 3. Kategorilere göre talep dağılımı
+        kategori_sorgu = text("""
+            SELECT
+                COALESCE(k.kategori_ad, 'Kategorisiz') AS kategori,
+                COUNT(*) AS talep_sayisi
+            FROM talepler t
+            LEFT JOIN kategoriler k
+                ON t.talep_kategori_id = k.kategori_id
+            GROUP BY k.kategori_ad
+            ORDER BY talep_sayisi DESC;
+        """)
+
+        kategori_sonuc = db.execute(kategori_sorgu)
+
+        kategori_dagilimi = [
+            {
+                "kategori": satir.kategori,
+                "talep_sayisi": satir.talep_sayisi
+            }
+            for satir in kategori_sonuc
+        ]
+
+        # 4. Ortalama ilk yanıt bekleme süresi
+        ortalama_sure_sorgu = text("""
+            SELECT
+                AVG(
+                    ilk_yorum.ilk_yorum_tarihi
+                    - t.talep_olusturulma_tarihi
+                ) AS ortalama_yanit_bekleme_suresi
+            FROM talepler t
+            JOIN (
+                SELECT
+                    yorum_talep_id,
+                    MIN(yorum_olusturulma_tarihi) AS ilk_yorum_tarihi
+                FROM yorumlar
+                GROUP BY yorum_talep_id
+            ) ilk_yorum
+                ON ilk_yorum.yorum_talep_id = t.talep_id;
+        """)
+
+        ortalama_sure = db.execute(ortalama_sure_sorgu).scalar()
+
+        # PostgreSQL interval değeri Python'da timedelta olarak gelir.
+        if ortalama_sure:
+            toplam_saniye = int(ortalama_sure.total_seconds())
+
+            gun = toplam_saniye // 86400
+            kalan_saniye = toplam_saniye % 86400
+
+            saat = kalan_saniye // 3600
+            kalan_saniye = kalan_saniye % 3600
+
+            dakika = kalan_saniye // 60
+
+            ortalama_yanit_bekleme_suresi = (
+                f"{gun} Gün {saat} Saat {dakika} Dakika"
+            )
+        else:
+            ortalama_yanit_bekleme_suresi = "Henüz yanıt verisi yok"
+
+        return {
+            "mesaj": "Dashboard istatistikleri başarıyla getirildi.",
+            "veri": {
+                "son_24_saat_talep_sayisi": son_24_saat_talep_sayisi,
+                "kritik_talep_sayisi": kritik_talep_sayisi,
+                "ortalama_yanit_bekleme_suresi": ortalama_yanit_bekleme_suresi,
+                "kategori_dagilimi": kategori_dagilimi
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dashboard istatistikleri alınırken hata oluştu: {str(e)}"
+        )
+
     finally:
         db.close()
 
