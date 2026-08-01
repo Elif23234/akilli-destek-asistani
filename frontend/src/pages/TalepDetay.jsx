@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+
 import {
   useNavigate,
   useParams,
 } from "react-router-dom";
 
 import {
-  getBenzerTalepler,
   getTalepDetayi,
+  getBenzerTalepler,
+  personelOnaylaVeGonder,
+  talebiYapayZekaIleAnalizEt,
 } from "../services/api";
 
-import "./TalepDetay.css";
+import "../pages/TalepDetay.css";
 
 function TalepDetay() {
   const { takipNo } = useParams();
@@ -34,45 +37,76 @@ function TalepDetay() {
     setBenzerTalepHatasi,
   ] = useState("");
 
+  const [yanitMetni, setYanitMetni] =
+    useState("");
+  const [yanitKontrolEdildi, setYanitKontrolEdildi] =
+    useState(false);
+  const [onayGonderiliyor, setOnayGonderiliyor] =
+    useState(false);
+  const [onayMesaji, setOnayMesaji] =
+    useState("");
+  const [onayHatasi, setOnayHatasi] =
+    useState("");
+
+  const [aiAnalizYapiliyor, setAiAnalizYapiliyor] =
+    useState(false);
+
+  const [aiAnalizMesaji, setAiAnalizMesaji] =
+    useState("");
+
+  const [aiAnalizHatasi, setAiAnalizHatasi] =
+    useState("");
+
   useEffect(() => {
-    async function talepDetayiniYukle() {
-      try {
-        const temizTakipNo =
-          decodeURIComponent(takipNo);
+  async function talepDetayiniYukle() {
+    try {
+      setYukleniyor(true);
+      setHata("");
 
-        const sonuc =
-          await getTalepDetayi(temizTakipNo);
+      const temizTakipNo =
+        decodeURIComponent(takipNo);
 
-        console.log(
-          "Detay verisi:",
-          sonuc.veri
+      const sonuc =
+        await getTalepDetayi(temizTakipNo);
+
+      console.log(
+        "Detay verisi:",
+        sonuc.veri
+      );
+
+      setTalep(sonuc.veri);
+
+      setYanitMetni(
+        sonuc.veri?.ai_taslak_yanit || ""
+      );
+
+      setYanitKontrolEdildi(false);
+      setOnayMesaji("");
+      setOnayHatasi("");
+
+      const aramaMetni = [
+        sonuc.veri?.talep_baslik,
+        sonuc.veri?.talep_ham_icerik,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      setYukleniyor(false);
+
+      if (aramaMetni.trim()) {
+        benzerTalepleriYukle(
+          aramaMetni,
+          temizTakipNo
         );
-
-        setTalep(sonuc.veri);
-
-        const aramaMetni = [
-          sonuc.veri?.talep_baslik,
-          sonuc.veri?.talep_ham_icerik,
-        ]
-          .filter(Boolean)
-          .join(" ");
-
-        if (aramaMetni.trim()) {
-          await benzerTalepleriYukle(
-            aramaMetni,
-            temizTakipNo
-          );
-        }
-      } catch (error) {
-        setHata(error.message);
-      } finally {
-        setYukleniyor(false);
       }
+    } catch (error) {
+      setHata(error.message);
+      setYukleniyor(false);
     }
+  }
 
-    talepDetayiniYukle();
-  }, [takipNo]);
-
+  talepDetayiniYukle();
+}, [takipNo]);
   async function benzerTalepleriYukle(
     aramaMetni,
     mevcutTakipNo
@@ -321,9 +355,11 @@ function TalepDetay() {
 
     if (
       temizDurum ===
-      "musteri_bekleniyor"
+        "musteri_bekleniyor" ||
+      temizDurum ===
+        "musteri_yaniti_bekleniyor"
     ) {
-      return "Müşteri Bekleniyor";
+      return "Müşteri Yanıtı Bekleniyor";
     }
 
     return durum || "Belirtilmemiş";
@@ -375,12 +411,120 @@ function TalepDetay() {
 
     if (
       temizDurum ===
-      "musteri_bekleniyor"
+        "musteri_bekleniyor" ||
+      temizDurum ===
+        "musteri_yaniti_bekleniyor"
     ) {
       return "durum-musteri-bekleniyor";
     }
 
     return "durum-belirsiz";
+  }
+
+  async function aiAnaliziniBaslat() {
+    if (!talep?.talep_id) {
+      setAiAnalizHatasi(
+        "Talep kimliği bulunamadığı için analiz başlatılamadı."
+      );
+      return;
+    }
+
+    if (!talep?.talep_baslik) {
+      setAiAnalizHatasi(
+        "Talep başlığı bulunamadığı için analiz başlatılamadı."
+      );
+      return;
+    }
+
+    if (!talep?.talep_ham_icerik) {
+      setAiAnalizHatasi(
+        "Talep içeriği bulunamadığı için analiz başlatılamadı."
+      );
+      return;
+    }
+
+    try {
+      setAiAnalizYapiliyor(true);
+      setAiAnalizMesaji("");
+      setAiAnalizHatasi("");
+
+      const sonuc = await talebiYapayZekaIleAnalizEt({
+        talepId: talep.talep_id,
+        baslik: talep.talep_baslik,
+        icerik: talep.talep_ham_icerik,
+      });
+
+      setAiAnalizMesaji(
+        sonuc.mesaj ||
+          "Yapay zekâ analizi başarıyla tamamlandı."
+      );
+
+      /*
+        Endpoint analiz sonucunu döndürüyor fakat talep detay
+        görünümündeki bütün alanları döndürmeyebilir.
+        Bu nedenle en güvenli yöntem sayfayı yeniden yüklemektir.
+      */
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      setAiAnalizHatasi(error.message);
+    } finally {
+      setAiAnalizYapiliyor(false);
+    }
+  }
+
+  async function yanitiOnaylaVeGonder() {
+    const temizYanit = yanitMetni.trim();
+
+    if (!temizYanit) {
+      setOnayHatasi(
+        "Müşteriye gönderilecek yanıt boş bırakılamaz."
+      );
+      return;
+    }
+
+    if (!yanitKontrolEdildi) {
+      setOnayHatasi(
+        "Göndermeden önce yanıtı kontrol ettiğinizi onaylayın."
+      );
+      return;
+    }
+
+    if (!talep?.talep_id) {
+      setOnayHatasi(
+        "Talep kimliği bulunamadığı için işlem yapılamadı."
+      );
+      return;
+    }
+
+    try {
+      setOnayGonderiliyor(true);
+      setOnayMesaji("");
+      setOnayHatasi("");
+
+      const sonuc = await personelOnaylaVeGonder({
+        talepId: talep.talep_id,
+        yanitMetni: temizYanit,
+        islemTipi: "AI_YANITI_ONAYLANDI",
+      });
+
+      setOnayMesaji(
+        sonuc.mesaj ||
+          "Yanıt onaylandı ve müşteriye gönderilmek üzere kaydedildi."
+      );
+
+      setTalep((mevcutTalep) => ({
+        ...mevcutTalep,
+        talep_durum: "musteri_yaniti_bekleniyor",
+      }));
+
+      setYanitKontrolEdildi(false);
+    } catch (error) {
+      setOnayHatasi(error.message);
+    } finally {
+      setOnayGonderiliyor(false);
+    }
   }
 
   function benzerTalepDetayinaGit(
@@ -491,6 +635,19 @@ function TalepDetay() {
     talep.yz_duygu_durumu ||
     talep.duygu_durumu ||
     talep.duygu;
+
+  const temizTalepDurumu = String(
+    talep.talep_durum || ""
+  )
+    .trim()
+    .toLocaleLowerCase("tr-TR");
+
+  const talepAcikMi =
+    temizTalepDurumu === "acik" ||
+    temizTalepDurumu === "açık";
+
+  const aiAnalizButonuGoster =
+      talepAcikMi && !aiOzeti;
 
   return (
     <section className="talep-detay-sayfasi">
@@ -732,8 +889,148 @@ function TalepDetay() {
                   "Bu talep için henüz öncelik gerekçesi oluşturulmamış."}
               </p>
             </div>
+             {aiAnalizButonuGoster && (
+  <div className="ai-analiz-islem-alani">
+    <div className="ai-analiz-islem-aciklama">
+      <strong>Bu talep henüz analiz edilmemiş</strong>
+
+      <p>
+        Kategori, öncelik, duygu durumu ve AI
+        özetini oluşturmak için analizi
+        başlatabilirsiniz.
+      </p>
+    </div>
+
+    {aiAnalizHatasi && (
+      <div className="ai-analiz-bildirim ai-analiz-hata">
+        ⚠️ {aiAnalizHatasi}
+      </div>
+    )}
+
+    {aiAnalizMesaji && (
+      <div className="ai-analiz-bildirim ai-analiz-basarili">
+        ✅ {aiAnalizMesaji}
+      </div>
+    )}
+
+    <button
+      type="button"
+      className="ai-analiz-baslat-butonu"
+      onClick={aiAnaliziniBaslat}
+      disabled={aiAnalizYapiliyor}
+    >
+      {aiAnalizYapiliyor
+        ? "AI analiz ediyor..."
+        : "🤖 AI Analizini Başlat"}
+    </button>
+  </div>
+)}
           </article>
         </div>
+
+        {(talep.talep_durum
+          ?.toLocaleLowerCase("tr-TR")
+          .trim() === "onay_bekliyor" ||
+          onayMesaji) && (
+          <section className="detay-karti personel-onay-bolumu">
+            <div className="personel-onay-basligi">
+              <div className="detay-kart-basligi">
+                <div className="detay-kart-ikon yesil-ikon">
+                  ✅
+                </div>
+
+                <div>
+                  <span>Personel işlemi</span>
+                  <h2>Yönetici Onayı</h2>
+                </div>
+              </div>
+
+              <p>
+                Yapay zekâ tarafından hazırlanan yanıtı
+                kontrol edin. Gerekirse düzenleyip
+                müşteriye gönderin.
+              </p>
+            </div>
+
+            <label
+              className="yanit-metin-etiketi"
+              htmlFor="personel-yanit-metni"
+            >
+              Müşteriye gönderilecek yanıt
+            </label>
+
+            <textarea
+              id="personel-yanit-metni"
+              className="personel-yanit-alani"
+              value={yanitMetni}
+              onChange={(event) => {
+                setYanitMetni(event.target.value);
+                setOnayMesaji("");
+                setOnayHatasi("");
+                setYanitKontrolEdildi(false);
+              }}
+              rows={8}
+              disabled={onayGonderiliyor}
+              placeholder="AI yanıt taslağı bulunmuyorsa müşteriye gönderilecek yanıtı buraya yazın."
+            />
+
+            <label className="yanit-kontrol-satiri">
+              <input
+                type="checkbox"
+                checked={yanitKontrolEdildi}
+                onChange={(event) => {
+                  setYanitKontrolEdildi(
+                    event.target.checked
+                  );
+                  setOnayHatasi("");
+                }}
+                disabled={onayGonderiliyor}
+              />
+
+              <span>
+                Yanıtı kontrol ettim ve müşteriye
+                gönderilmesini onaylıyorum.
+              </span>
+            </label>
+
+            {onayHatasi && (
+              <div className="onay-bildirim onay-hata">
+                ⚠️ {onayHatasi}
+              </div>
+            )}
+
+            {onayMesaji && (
+              <div className="onay-bildirim onay-basarili">
+                ✅ {onayMesaji}
+              </div>
+            )}
+
+            <div className="personel-onay-alt-satir">
+              <small>
+                Gönderilen yanıt sistem kayıtlarına
+                personel yanıtı olarak eklenecektir.
+              </small>
+
+              <button
+                type="button"
+                className="yaniti-onayla-butonu"
+                onClick={yanitiOnaylaVeGonder}
+                disabled={
+                  onayGonderiliyor ||
+                  !yanitKontrolEdildi ||
+                  !yanitMetni.trim() ||
+                  talep.talep_durum
+                    ?.toLocaleLowerCase("tr-TR")
+                    .trim() !== "onay_bekliyor"
+                }
+              >
+                {onayGonderiliyor
+                  ? "Gönderiliyor..."
+                  : "Onayla ve Gönder"}
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="detay-karti benzer-talepler-bolumu">
           <div className="benzer-talepler-basligi">
@@ -838,4 +1135,4 @@ function TalepDetay() {
   );
 }
 
-export default TalepDetay;
+export default TalepDetay

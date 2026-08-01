@@ -31,7 +31,9 @@ export async function getTalepler() {
 
 export async function getTalepDetayi(takipNo) {
   const response = await fetch(
-    `${API_URL}/talepler/${encodeURIComponent(takipNo)}`,
+    `${API_URL}/talepler/${encodeURIComponent(
+      takipNo
+    )}`,
     {
       headers: {
         ...getAuthHeaders(),
@@ -84,16 +86,27 @@ export async function getDashboardIstatistikleri() {
   return response.json();
 }
 
-export async function yeniTalepOlustur(talepBilgileri) {
-  const response = await fetch(`${API_URL}/talepler`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(talepBilgileri),
-  });
+export async function yeniTalepOlustur(
+  talepBilgileri
+) {
+  const response = await fetch(
+    `${API_URL}/talepler`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(talepBilgileri),
+    }
+  );
 
-  const sonuc = await response.json();
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -132,7 +145,87 @@ export async function adminGirisi(
 
   if (!response.ok) {
     throw new Error(
-      sonuc.detail || "Yönetici girişi yapılamadı."
+      sonuc.detail ||
+        "Yönetici girişi yapılamadı."
+    );
+  }
+
+  return sonuc;
+}
+
+export async function personelOnaylaVeGonder({
+  talepId,
+  yanitMetni,
+  islemTipi,
+}) {
+  const response = await fetch(
+    `${API_URL}/personel/onayla-ve-gonder`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({
+        talep_id: talepId,
+        yanit_metni: yanitMetni,
+        islem_tipi:
+          islemTipi ||
+          "AI_YANITI_ONAYLANDI",
+      }),
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail || "Yanıt onaylanamadı."
+    );
+  }
+
+  return sonuc;
+}
+
+export async function talebiYapayZekaIleAnalizEt({
+  talepId,
+  baslik,
+  icerik,
+}) {
+  const parametreler = new URLSearchParams({
+    talep_id: talepId,
+    baslik: baslik,
+    icerik: icerik,
+  });
+
+  const response = await fetch(
+    `${API_URL}/talepler/yapay-zeka-analiz?${parametreler.toString()}`,
+    {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Yapay zekâ analizi sırasında bir hata oluştu."
     );
   }
 

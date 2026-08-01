@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  getTalepler,
   getDashboardIstatistikleri,
 } from "../services/api";
 
@@ -11,7 +10,6 @@ import "../styles/Dashboard.css";
 function Dashboard() {
   const navigate = useNavigate();
 
-  const [talepler, setTalepler] = useState([]);
   const [dashboardVerisi, setDashboardVerisi] =
     useState(null);
 
@@ -23,19 +21,8 @@ function Dashboard() {
   useEffect(() => {
     async function dashboardVerileriniGetir() {
       try {
-        const [
-          taleplerSonucu,
-          dashboardSonucu,
-        ] = await Promise.all([
-          getTalepler(),
-          getDashboardIstatistikleri(),
-        ]);
-
-        if (Array.isArray(taleplerSonucu.veri)) {
-          setTalepler(taleplerSonucu.veri);
-        } else {
-          setTalepler([]);
-        }
+        const dashboardSonucu =
+          await getDashboardIstatistikleri();
 
         if (dashboardSonucu.veri) {
           setDashboardVerisi(
@@ -54,51 +41,34 @@ function Dashboard() {
     dashboardVerileriniGetir();
   }, []);
 
-  function metniKucult(deger) {
-    return String(deger || "")
-      .trim()
-      .toLocaleLowerCase("tr-TR");
-  }
+  const toplamTalepSayisi =
+    dashboardVerisi?.toplam_talep_sayisi || 0;
 
-  const acikTalepSayisi = talepler.filter(
-    (talep) => {
-      const durum = metniKucult(
-        talep.talep_durum
-      );
+  const acikTalepSayisi =
+    dashboardVerisi?.acik_talep_sayisi || 0;
 
-      return (
-        durum === "acik" ||
-        durum === "açık"
-      );
-    }
-  ).length;
+  const onayBekleyenSayisi =
+    dashboardVerisi
+      ?.onay_bekleyen_talep_sayisi || 0;
 
-  const onayBekleyenSayisi = talepler.filter(
-    (talep) => {
-      const durum = metniKucult(
-        talep.talep_durum
-      );
-
-      return durum === "onay_bekliyor";
-    }
-  ).length;
+  const incelenenTalepSayisi =
+    dashboardVerisi?.incelenen_talep_sayisi || 0;
 
   const otomatikYanitlananSayisi =
-    talepler.filter((talep) => {
-      const durum = metniKucult(
-        talep.talep_durum
-      );
+    dashboardVerisi
+      ?.otomatik_yanitlanan_talep_sayisi || 0;
 
-      return durum === "otomatik_yanitlandi";
-    }).length;
+  const musteriYanitiBekleyenSayisi =
+    dashboardVerisi
+      ?.musteri_yaniti_bekleyen_talep_sayisi ||
+    0;
+
+  const cozulenTalepSayisi =
+    dashboardVerisi?.cozulen_talep_sayisi || 0;
 
   const aiAnalizEdilenTalepSayisi =
-    talepler.filter(
-      (talep) =>
-        talep.yz_ozet ||
-        talep.yz_oncelik_seviyesi ||
-        talep.yz_guven_skoru != null
-    ).length;
+    dashboardVerisi
+      ?.ai_analiz_edilen_talep_sayisi || 0;
 
   const sonYirmiDortSaatTalepSayisi =
     dashboardVerisi
@@ -194,7 +164,7 @@ function Dashboard() {
 
           <div className="kart-icerik">
             <span>Toplam Talep</span>
-            <strong>{talepler.length}</strong>
+            <strong>{toplamTalepSayisi}</strong>
             <small>Tüm destek talepleri</small>
           </div>
 
@@ -217,6 +187,27 @@ function Dashboard() {
             <span>Açık Talepler</span>
             <strong>{acikTalepSayisi}</strong>
             <small>İşlem bekleyen talepler</small>
+          </div>
+
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-incelenen"
+          onClick={() =>
+            navigate("/talepler?durum=inceleniyor")
+          }
+        >
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon incelenen-ikon">
+            🔎
+          </div>
+
+          <div className="kart-icerik">
+            <span>İncelenen Talepler</span>
+            <strong>{incelenenTalepSayisi}</strong>
+            <small>Personel incelemesi gerekiyor</small>
           </div>
 
           <div className="kart-ok">→</div>
@@ -267,6 +258,52 @@ function Dashboard() {
               {otomatikYanitlananSayisi}
             </strong>
             <small>AI tarafından yanıtlandı</small>
+          </div>
+
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-musteri-bekleyen"
+          onClick={() =>
+            navigate(
+              "/talepler?durum=musteri_yaniti_bekleniyor"
+            )
+          }
+        >
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon musteri-bekleyen-ikon">
+            📬
+          </div>
+
+          <div className="kart-icerik">
+            <span>Müşteri Yanıtı Bekleyen</span>
+            <strong>
+              {musteriYanitiBekleyenSayisi}
+            </strong>
+            <small>Çözüm onayı bekleniyor</small>
+          </div>
+
+          <div className="kart-ok">→</div>
+        </article>
+
+        <article
+          className="dashboard-karti kart-cozulen"
+          onClick={() =>
+            navigate("/talepler?durum=cozuldu")
+          }
+        >
+          <div className="kart-parilti"></div>
+
+          <div className="kart-ikon cozulen-ikon">
+            ✅
+          </div>
+
+          <div className="kart-icerik">
+            <span>Çözülen Talepler</span>
+            <strong>{cozulenTalepSayisi}</strong>
+            <small>Müşteri tarafından onaylandı</small>
           </div>
 
           <div className="kart-ok">→</div>

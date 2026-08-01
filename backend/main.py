@@ -1,6 +1,13 @@
+import os
+import smtplib
+
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional
+from dotenv import load_dotenv
 from database import SessionLocal
 from sqlalchemy import text
 from ai_service import talep_analiz_et_ve_uygula, tekrar_eden_talep_kontrol
@@ -11,6 +18,36 @@ from security import (
     admin_token_olustur,
     admin_token_dogrula,
 )
+
+load_dotenv()
+
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+
+
+def eposta_gonder(alici_eposta: str, konu: str, mesaj: str):
+    if not SMTP_EMAIL or not SMTP_PASSWORD:
+        raise RuntimeError(
+            "SMTP_EMAIL veya SMTP_PASSWORD .env dosyasında tanımlı değil."
+        )
+
+    eposta = MIMEMultipart()
+    eposta["From"] = SMTP_EMAIL
+    eposta["To"] = alici_eposta
+    eposta["Subject"] = konu
+    eposta.attach(MIMEText(mesaj, "plain", "utf-8"))
+
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        print("SMTP_EMAIL:", repr(SMTP_EMAIL))
+        print("SMTP_PASSWORD uzunluğu:", len(SMTP_PASSWORD or ""))
+        smtp.login(SMTP_EMAIL, SMTP_PASSWORD)
+        smtp.send_message(eposta)
+
 
 app = FastAPI(title="Akıllı Destek Asistanı API")
 
@@ -488,33 +525,136 @@ def personel_cevabi_gonder(
 ):
     """
     Personelin AI taslağını onaylayıp veya düzenleyip müşteriye ilettiği endpoint.
-    Kullanıcıya bildirim gitmesi için durumu 'musteri_yaniti_bekleniyor' yapar.
+    Yanıtı sisteme kaydeder, müşteriye gerçek e-posta gönderir ve
+    talep durumunu 'musteri_yaniti_bekleniyor' olarak günceller.
     """
     db = SessionLocal()
+
     try:
-        # Yanıtı 'yorumlar' tablosuna müşteri görecek şekilde ekle
-        # ve statüyü 1. senaryodaki gibi geri bildirim alınabilecek konuma çek!
-        sorgu = text("""
+        temiz_yanit = onay.yanit_metni.strip()
+
+        if not temiz_yanit:
+            raise HTTPException(
+                status_code=400,
+                detail="Gönderilecek yanıt metni boş olamaz."
+            )
+
+        # Talebe ait müşteri ve takip bilgilerini al.
+        talep_sorgu = text("""
+            SELECT
+                talep_gonderen_ad_soyad,
+                talep_gonderen_eposta,
+                talep_takip_no,
+                talep_baslik
+            FROM talepler
+            WHERE talep_id = :talep_id;
+        """)
+
+        talep_sonucu = db.execute(
+            talep_sorgu,
+            {"talep_id": onay.talep_id}
+        ).first()
+
+        if not talep_sonucu:
+            raise HTTPException(
+                status_code=404,
+                detail="Yanıt gönderilecek talep bulunamadı."
+            )
+
+        talep_bilgisi = dict(talep_sonucu._mapping)
+        musteri_eposta = talep_bilgisi.get("talep_gonderen_eposta")
+
+        if not musteri_eposta:
+            raise HTTPException(
+                status_code=400,
+                detail="Talebe ait müşteri e-posta adresi bulunamadı."
+            )
+
+        musteri_adi = (
+            talep_bilgisi.get("talep_gonderen_ad_soyad")
+            or "Değerli Müşterimiz"
+        )
+        takip_no = talep_bilgisi.get("talep_takip_no") or "Belirtilmemiş"
+        talep_basligi = talep_bilgisi.get("talep_baslik") or "Destek Talebi"
+
+        eposta_konusu = f"Destek Talebiniz Yanıtlandı - {takip_no}"
+        eposta_mesaji = f"""Merhaba {musteri_adi},
+
+"{talep_basligi}" başlıklı destek talebiniz yanıtlandı.
+
+Takip Numaranız: {takip_no}
+
+Yanıtımız:
+{temiz_yanit}
+
+Bu e-posta otomatik olarak gönderilmiştir.
+
+Saygılarımızla,
+Akıllı Müşteri Destek Ekibi
+"""
+        print("Gönderilecek adres:", musteri_eposta)
+        # E-posta gönderilemezse veritabanı işlemi de tamamlanmaz.
+        eposta_gonder(
+            alici_eposta=musteri_eposta,
+            konu=eposta_konusu,
+            mesaj=eposta_mesaji
+        )
+
+        # Yanıtı yorumlara kaydet ve müşteri geri bildirimi bekleme durumuna geçir.
+        yorum_sorgu = text("""
             CALL sp_talebe_yorum_ekle(
-                :talep_id, :kullanici_id, :mesaj, 'musteri_yaniti_bekleniyor', 'personel'
+                :talep_id,
+                :kullanici_id,
+                :mesaj,
+                'musteri_yaniti_bekleniyor',
+                'personel'
             )
         """)
-        
-        log_mesaji = f"[{onay.islem_tipi}]: {onay.yanit_metni}"
-        
-        db.execute(sorgu, {
+
+        log_mesaji = f"[{onay.islem_tipi}]: {temiz_yanit}"
+
+        db.execute(yorum_sorgu, {
             "talep_id": onay.talep_id,
             "kullanici_id": admin["kullanici_id"],
             "mesaj": log_mesaji
         })
-        
+
         db.commit()
+
         return {
-            "mesaj": "Yanıt sisteme kaydedildi. Müşteri geri bildirimi bekleniyor."
+            "mesaj": "Yanıt sisteme kaydedildi ve müşteriye e-posta olarak gönderildi.",
+            "gonderilen_eposta": musteri_eposta,
+            "takip_no": takip_no
         }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except smtplib.SMTPAuthenticationError:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Gmail kimlik doğrulaması başarısız oldu. "
+                "SMTP_EMAIL ve uygulama şifresini kontrol edin."
+            )
+        )
+
+    except smtplib.SMTPException as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"E-posta gönderilirken SMTP hatası oluştu: {str(e)}"
+        )
+
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Onay işlemi sırasında hata: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Onay ve gönderim işlemi sırasında hata oluştu: {str(e)}"
+        )
+
     finally:
         db.close()
 
@@ -655,27 +795,69 @@ def dashboard_istatistikleri(
     db = SessionLocal()
 
     try:
-        # 1. Son 24 saatte gelen talep sayısı
-        son_24_saat_sorgu = text("""
-            SELECT COUNT(*) AS talep_sayisi
-            FROM talepler
-            WHERE talep_olusturulma_tarihi >= NOW() - INTERVAL '24 hours';
+        # 1. Talep durumlarına göre bütün sayaçlar
+        durum_sayilari_sorgu = text("""
+            SELECT
+                COUNT(*) AS toplam_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE LOWER(TRIM(talep_durum)) IN ('acik', 'açık')
+                ) AS acik_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE LOWER(TRIM(talep_durum)) = 'onay_bekliyor'
+                ) AS onay_bekleyen_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE LOWER(TRIM(talep_durum)) = 'inceleniyor'
+                ) AS incelenen_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE LOWER(TRIM(talep_durum)) = 'otomatik_yanitlandi'
+                ) AS otomatik_yanitlanan_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE LOWER(TRIM(talep_durum)) = 'musteri_yaniti_bekleniyor'
+                ) AS musteri_yaniti_bekleyen_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE LOWER(TRIM(talep_durum)) = 'cozuldu'
+                ) AS cozulen_talep_sayisi,
+
+                COUNT(*) FILTER (
+                    WHERE talep_olusturulma_tarihi
+                        >= NOW() - INTERVAL '24 hours'
+                ) AS son_24_saat_talep_sayisi
+
+            FROM talepler;
         """)
 
-        son_24_saat_sonuc = db.execute(son_24_saat_sorgu).scalar()
-        son_24_saat_talep_sayisi = son_24_saat_sonuc or 0
+        durum_sayilari_sonucu = db.execute(
+            durum_sayilari_sorgu
+        ).first()
 
-        # 2. Kritik talep sayısı
+        # 2. Yapay zekâ tarafından analiz edilen talep sayısı
+        ai_analiz_sorgu = text("""
+            SELECT COUNT(DISTINCT yz_talep_id)
+            FROM yz_analizleri;
+        """)
+
+        ai_analiz_edilen_talep_sayisi = (
+            db.execute(ai_analiz_sorgu).scalar() or 0
+        )
+
+        # 3. Kritik öncelikli talep sayısı
         kritik_sorgu = text("""
-            SELECT COUNT(*) AS kritik_talep_sayisi
+            SELECT COUNT(DISTINCT yz_talep_id)
             FROM yz_analizleri
-            WHERE LOWER(yz_oncelik_seviyesi) = 'kritik';
+            WHERE LOWER(TRIM(yz_oncelik_seviyesi)) = 'kritik';
         """)
 
-        kritik_sonuc = db.execute(kritik_sorgu).scalar()
-        kritik_talep_sayisi = kritik_sonuc or 0
+        kritik_talep_sayisi = (
+            db.execute(kritik_sorgu).scalar() or 0
+        )
 
-        # 3. Kategorilere göre talep dağılımı
+        # 4. Kategorilere göre talep dağılımı
         kategori_sorgu = text("""
             SELECT
                 COALESCE(k.kategori_ad, 'Kategorisiz') AS kategori,
@@ -687,17 +869,17 @@ def dashboard_istatistikleri(
             ORDER BY talep_sayisi DESC;
         """)
 
-        kategori_sonuc = db.execute(kategori_sorgu)
+        kategori_sonucu = db.execute(kategori_sorgu)
 
         kategori_dagilimi = [
             {
                 "kategori": satir.kategori,
                 "talep_sayisi": satir.talep_sayisi
             }
-            for satir in kategori_sonuc
+            for satir in kategori_sonucu
         ]
 
-        # 4. Ortalama ilk yanıt bekleme süresi
+        # 5. Ortalama ilk yanıt bekleme süresi
         ortalama_sure_sorgu = text("""
             SELECT
                 AVG(
@@ -708,18 +890,22 @@ def dashboard_istatistikleri(
             JOIN (
                 SELECT
                     yorum_talep_id,
-                    MIN(yorum_olusturulma_tarihi) AS ilk_yorum_tarihi
+                    MIN(yorum_olusturulma_tarihi)
+                        AS ilk_yorum_tarihi
                 FROM yorumlar
                 GROUP BY yorum_talep_id
             ) ilk_yorum
                 ON ilk_yorum.yorum_talep_id = t.talep_id;
         """)
 
-        ortalama_sure = db.execute(ortalama_sure_sorgu).scalar()
+        ortalama_sure = db.execute(
+            ortalama_sure_sorgu
+        ).scalar()
 
-        # PostgreSQL interval değeri Python'da timedelta olarak gelir.
         if ortalama_sure:
-            toplam_saniye = int(ortalama_sure.total_seconds())
+            toplam_saniye = int(
+                ortalama_sure.total_seconds()
+            )
 
             gun = toplam_saniye // 86400
             kalan_saniye = toplam_saniye % 86400
@@ -730,27 +916,66 @@ def dashboard_istatistikleri(
             dakika = kalan_saniye // 60
 
             ortalama_yanit_bekleme_suresi = (
-                f"{gun} Gün {saat} Saat {dakika} Dakika"
+                f"{gun} Gün {saat} Saat "
+                f"{dakika} Dakika"
             )
         else:
-            ortalama_yanit_bekleme_suresi = "Henüz yanıt verisi yok"
+            ortalama_yanit_bekleme_suresi = (
+                "Henüz yanıt verisi yok"
+            )
 
         return {
-            "mesaj": "Dashboard istatistikleri başarıyla getirildi.",
+            "mesaj": (
+                "Dashboard istatistikleri "
+                "başarıyla getirildi."
+            ),
             "veri": {
-                "son_24_saat_talep_sayisi": son_24_saat_talep_sayisi,
-                "kritik_talep_sayisi": kritik_talep_sayisi,
-                "ortalama_yanit_bekleme_suresi": ortalama_yanit_bekleme_suresi,
-                "kategori_dagilimi": kategori_dagilimi
+                "toplam_talep_sayisi":
+                    durum_sayilari_sonucu.toplam_talep_sayisi,
+
+                "acik_talep_sayisi":
+                    durum_sayilari_sonucu.acik_talep_sayisi,
+
+                "onay_bekleyen_talep_sayisi":
+                    durum_sayilari_sonucu.onay_bekleyen_talep_sayisi,
+
+                "incelenen_talep_sayisi":
+                    durum_sayilari_sonucu.incelenen_talep_sayisi,
+
+                "otomatik_yanitlanan_talep_sayisi":
+                    durum_sayilari_sonucu.otomatik_yanitlanan_talep_sayisi,
+
+                "musteri_yaniti_bekleyen_talep_sayisi":
+                    durum_sayilari_sonucu.musteri_yaniti_bekleyen_talep_sayisi,
+
+                "cozulen_talep_sayisi":
+                    durum_sayilari_sonucu.cozulen_talep_sayisi,
+
+                "son_24_saat_talep_sayisi":
+                    durum_sayilari_sonucu.son_24_saat_talep_sayisi,
+
+                "kritik_talep_sayisi":
+                    kritik_talep_sayisi,
+
+                "ai_analiz_edilen_talep_sayisi":
+                    ai_analiz_edilen_talep_sayisi,
+
+                "ortalama_yanit_bekleme_suresi":
+                    ortalama_yanit_bekleme_suresi,
+
+                "kategori_dagilimi":
+                    kategori_dagilimi
             }
         }
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Dashboard istatistikleri alınırken hata oluştu: {str(e)}"
+            detail=(
+                "Dashboard istatistikleri alınırken "
+                f"hata oluştu: {str(e)}"
+            )
         )
 
     finally:
         db.close()
-

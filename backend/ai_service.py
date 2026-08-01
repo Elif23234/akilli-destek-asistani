@@ -93,10 +93,20 @@ def ai_sonucu_isle(
         riskli_mi = kategori_id in RISKLI_KATEGORILER
 
         # --- HİBRİT YÖNLENDİRME MANTIĞI ---
-        if riskli_mi or oncelik_seviyesi == "Kritik":
+
+        # Kritik talepler doğrudan personel incelemesine gider.
+        if oncelik_seviyesi == "Kritik":
+            yeni_durum = "inceleniyor"
+
+        # Riskli kategoriler yönetici/personel onayı bekler.
+        elif riskli_mi:
             yeni_durum = "onay_bekliyor"
+
+        # Güven skoru düşükse personel inceler.
         elif guven_skoru < 0.80:
             yeni_durum = "inceleniyor"
+
+        # Diğer güvenilir talepler otomatik yanıtlanır.
         else:
             yeni_durum = "otomatik_yanitlandi"
 
@@ -179,7 +189,6 @@ def ai_sonucu_isle(
         """)
 
         # Kritik talepler için Telegram bildirimi
-                # Kritik talepler için Telegram bildirimi
         if oncelik_seviyesi == "Kritik":
             try:
                 bildirim_hash = bildirim_hash_olustur(talep_id)
@@ -302,6 +311,21 @@ def ai_sonucu_isle(
 
             except Exception as e:
                 print(f"Telegram bildirimi hatası: {e}")
+                # Kritik taleplerde sistem bilgilendirmesi ekle
+        if oncelik_seviyesi == "Kritik":
+            db.execute(
+                yorum_sorgu,
+                {
+                    "talep_id": talep_id,
+                    "yorum_mesaj": (
+                        "[SİSTEM BİLDİRİMİ]: "
+                        "Talebiniz yapay zekâ tarafından kritik öncelikli olarak "
+                        "değerlendirilmiştir. Talebiniz ilgili destek personeline "
+                        "yönlendirilmiş olup inceleme süreci başlatılmıştır."
+                    ),
+                },
+            )
+
         db.execute(
             yorum_sorgu,
             {
