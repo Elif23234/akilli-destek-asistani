@@ -1090,3 +1090,94 @@ def dashboard_istatistikleri(
 
     finally:
         db.close()
+# 20. Dashboard - Geciken Talepler (GET)
+@app.get(
+    "/dashboard/geciken-talepler",
+    tags=["Dashboard"],
+)
+def geciken_talepleri_getir(
+    _admin: dict = Depends(admin_token_dogrula),
+):
+    db = SessionLocal()
+
+    try:
+        sorgu = text("""
+            SELECT
+                talep_id,
+                talep_takip_no,
+                talep_baslik,
+                talep_durum,
+                yz_oncelik_seviyesi,
+                bekleme_suresi,
+                gecikme_seviyesi,
+                gecikme_nedeni
+            FROM vw_geciken_talepler
+            WHERE gecikme_seviyesi <> 'normal'
+            ORDER BY bekleme_suresi DESC
+            LIMIT 5;
+        """)
+
+        sonuc = db.execute(sorgu)
+
+        geciken_talepler = []
+
+        for satir in sonuc:
+            kayit = dict(satir._mapping)
+
+            bekleme_suresi = kayit.get(
+                "bekleme_suresi"
+            )
+
+            if bekleme_suresi:
+                toplam_saniye = int(
+                    bekleme_suresi.total_seconds()
+                )
+
+                gun = toplam_saniye // 86400
+                kalan_saniye = toplam_saniye % 86400
+
+                saat = kalan_saniye // 3600
+                kalan_saniye = kalan_saniye % 3600
+
+                dakika = kalan_saniye // 60
+
+                if gun > 0:
+                    bekleme_metni = (
+                        f"{gun} gün {saat} saat "
+                        f"{dakika} dakika"
+                    )
+                elif saat > 0:
+                    bekleme_metni = (
+                        f"{saat} saat {dakika} dakika"
+                    )
+                else:
+                    bekleme_metni = (
+                        f"{dakika} dakika"
+                    )
+            else:
+                bekleme_metni = "Belirtilmemiş"
+
+            kayit["bekleme_suresi"] = (
+                bekleme_metni
+            )
+
+            geciken_talepler.append(kayit)
+
+        return {
+            "mesaj": (
+                "Geciken talepler başarıyla getirildi."
+            ),
+            "veri": geciken_talepler,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Geciken talepler alınırken "
+                f"hata oluştu: {str(e)}"
+            ),
+        )
+
+    finally:
+        db.close()

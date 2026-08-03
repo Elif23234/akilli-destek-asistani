@@ -268,3 +268,30 @@ export async function incelenenTalebiYanitla({
 
   return sonuc;
 }
+export async function getGecikenTalepler() {
+  const response = await fetch(
+    `${API_URL}/dashboard/geciken-talepler`,
+    {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Geciken talepler alınamadı."
+    );
+  }
+
+  return sonuc;
+}

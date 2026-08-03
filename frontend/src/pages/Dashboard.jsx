@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import {
   getDashboardIstatistikleri,
+  getGecikenTalepler,
 } from "../services/api";
 
 import "../styles/Dashboard.css";
@@ -18,11 +19,17 @@ function Dashboard() {
 
   const [hata, setHata] = useState("");
 
+  const [gecikenTalepler, setGecikenTalepler] =
+    useState([]);
+
   useEffect(() => {
     async function dashboardVerileriniGetir() {
       try {
-        const dashboardSonucu =
-          await getDashboardIstatistikleri();
+        const [dashboardSonucu, gecikenSonucu] =
+          await Promise.all([
+            getDashboardIstatistikleri(),
+            getGecikenTalepler(),
+          ]);
 
         if (dashboardSonucu.veri) {
           setDashboardVerisi(
@@ -31,6 +38,12 @@ function Dashboard() {
         } else {
           setDashboardVerisi(null);
         }
+
+        setGecikenTalepler(
+          Array.isArray(gecikenSonucu.veri)
+            ? gecikenSonucu.veri
+            : []
+        );
       } catch (error) {
         setHata(error.message);
       } finally {
@@ -400,6 +413,83 @@ function Dashboard() {
           <div className="kart-ok">→</div>
         </article>
       </div>
+
+
+
+      <article className="dashboard-bilgi-karti geciken-talepler-karti">
+        <div className="bilgi-karti-baslik">
+          <div className="bilgi-baslik-ikonu gecikme-ikonu">
+            ⏰
+          </div>
+
+          <div>
+            <span>SLA ve bekleme takibi</span>
+            <h3>Geciken Talepler</h3>
+          </div>
+        </div>
+
+        {gecikenTalepler.length === 0 ? (
+          <div className="kategori-bos-alani">
+            <div>✅</div>
+            <h4>Geciken talep yok</h4>
+            <p>
+              Belirlenen süre eşiklerini aşan aktif
+              bir talep bulunmuyor.
+            </p>
+          </div>
+        ) : (
+          <div className="geciken-talepler-listesi">
+            {gecikenTalepler.map((talep) => (
+              <button
+                type="button"
+                className="geciken-talep-satiri"
+                key={talep.talep_id}
+                onClick={() =>
+                  navigate(
+                    `/talep-detay/${encodeURIComponent(
+                      talep.talep_takip_no
+                    )}`
+                  )
+                }
+              >
+                <div className="geciken-talep-ust-satir">
+                  <strong>{talep.talep_takip_no}</strong>
+
+                  <span
+                    className={`gecikme-rozeti ${
+                      talep.gecikme_seviyesi ===
+                      "kritik_gecikme"
+                        ? "gecikme-kritik"
+                        : talep.gecikme_seviyesi ===
+                          "gecikmis"
+                        ? "gecikme-gecikmis"
+                        : "gecikme-uyari"
+                    }`}
+                  >
+                    {talep.gecikme_seviyesi ===
+                    "kritik_gecikme"
+                      ? "Kritik gecikme"
+                      : talep.gecikme_seviyesi ===
+                        "gecikmis"
+                      ? "Gecikmiş"
+                      : "Uyarı"}
+                  </span>
+                </div>
+
+                <span className="geciken-talep-baslik">
+                  {talep.talep_baslik}
+                </span>
+
+                <small>
+                  ⏱ {talep.bekleme_suresi}
+                </small>
+
+                <p>{talep.gecikme_nedeni}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </article>
 
       <div className="dashboard-alt-grid">
         <article className="dashboard-bilgi-karti">

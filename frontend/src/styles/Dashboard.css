@@ -946,3 +946,79 @@
     font-size: 19px;
   }
 }
+.geciken-talepler-karti {
+  margin-top: 24px;
+}
+
+.gecikme-ikonu {
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+}
+
+.geciken-talepler-listesi {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.geciken-talep-satiri {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.geciken-talep-satiri:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.geciken-talep-ust-satir {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.geciken-talep-baslik {
+  display: block;
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+.geciken-talep-satiri small {
+  display: block;
+  margin-top: 8px;
+  opacity: 0.72;
+}
+
+.geciken-talep-satiri p {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.gecikme-rozeti {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.gecikme-kritik {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.gecikme-gecikmis {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.gecikme-uyari {
+  background: #fef3c7;
+  color: #a16207;
+}
