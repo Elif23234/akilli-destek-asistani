@@ -231,3 +231,40 @@ export async function talebiYapayZekaIleAnalizEt({
 
   return sonuc;
 }
+export async function incelenenTalebiYanitla({
+  talepId,
+  yanitMetni,
+}) {
+  const response = await fetch(
+    `${API_URL}/personel/incelenen-yanitla`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({
+        talep_id: talepId,
+        yanit_metni: yanitMetni,
+        islem_tipi: "MANUEL_INCELEME_YANITI",
+      }),
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "İncelenen talebe yanıt gönderilemedi."
+    );
+  }
+
+  return sonuc;
+}

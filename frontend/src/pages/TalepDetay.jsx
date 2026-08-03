@@ -8,6 +8,7 @@ import {
 import {
   getTalepDetayi,
   getBenzerTalepler,
+  incelenenTalebiYanitla,
   personelOnaylaVeGonder,
   talebiYapayZekaIleAnalizEt,
 } from "../services/api";
@@ -77,7 +78,10 @@ function TalepDetay() {
       setTalep(sonuc.veri);
 
       setYanitMetni(
-        sonuc.veri?.ai_taslak_yanit || ""
+        sonuc.veri?.ai_taslak_yanit ||
+          sonuc.veri?.yz_cozum_onerisi ||
+          sonuc.veri?.onerilen_cevap ||
+          ""
       );
 
       setYanitKontrolEdildi(false);
@@ -503,11 +507,24 @@ function TalepDetay() {
       setOnayMesaji("");
       setOnayHatasi("");
 
-      const sonuc = await personelOnaylaVeGonder({
-        talepId: talep.talep_id,
-        yanitMetni: temizYanit,
-        islemTipi: "AI_YANITI_ONAYLANDI",
-      });
+      const temizDurum = talep.talep_durum
+        ?.toLocaleLowerCase("tr-TR")
+        .trim();
+
+      let sonuc;
+
+      if (temizDurum === "inceleniyor") {
+        sonuc = await incelenenTalebiYanitla({
+          talepId: talep.talep_id,
+          yanitMetni: temizYanit,
+        });
+      } else {
+        sonuc = await personelOnaylaVeGonder({
+          talepId: talep.talep_id,
+          yanitMetni: temizYanit,
+          islemTipi: "AI_YANITI_ONAYLANDI",
+        });
+      }
 
       setOnayMesaji(
         sonuc.mesaj ||
@@ -928,27 +945,38 @@ function TalepDetay() {
           </article>
         </div>
 
-        {(talep.talep_durum
-          ?.toLocaleLowerCase("tr-TR")
-          .trim() === "onay_bekliyor" ||
-          onayMesaji) && (
+        {(
+          talep.talep_durum
+            ?.toLocaleLowerCase("tr-TR")
+            .trim() === "onay_bekliyor" ||
+          talep.talep_durum
+            ?.toLocaleLowerCase("tr-TR")
+            .trim() === "inceleniyor" ||
+          onayMesaji
+        ) && (
           <section className="detay-karti personel-onay-bolumu">
             <div className="personel-onay-basligi">
               <div className="detay-kart-basligi">
                 <div className="detay-kart-ikon yesil-ikon">
-                  ✅
+                  {temizTalepDurumu === "inceleniyor"
+                    ? "🔍"
+                    : "✅"}
                 </div>
 
                 <div>
                   <span>Personel işlemi</span>
-                  <h2>Yönetici Onayı</h2>
+                  <h2>
+                    {temizTalepDurumu === "inceleniyor"
+                      ? "Manuel İnceleme Yanıtı"
+                      : "Yönetici Onayı"}
+                  </h2>
                 </div>
               </div>
 
               <p>
-                Yapay zekâ tarafından hazırlanan yanıtı
-                kontrol edin. Gerekirse düzenleyip
-                müşteriye gönderin.
+                {temizTalepDurumu === "inceleniyor"
+                  ? "Talebi ve yapay zekâ önerisini inceleyin. Müşteriye gönderilecek nihai yanıtı düzenleyin."
+                  : "Yapay zekâ tarafından hazırlanan yanıtı kontrol edin. Gerekirse düzenleyip müşteriye gönderin."}
               </p>
             </div>
 
@@ -1019,14 +1047,17 @@ function TalepDetay() {
                   onayGonderiliyor ||
                   !yanitKontrolEdildi ||
                   !yanitMetni.trim() ||
-                  talep.talep_durum
-                    ?.toLocaleLowerCase("tr-TR")
-                    .trim() !== "onay_bekliyor"
+                  ![
+                    "onay_bekliyor",
+                    "inceleniyor",
+                  ].includes(temizTalepDurumu)
                 }
               >
                 {onayGonderiliyor
                   ? "Gönderiliyor..."
-                  : "Onayla ve Gönder"}
+                  : temizTalepDurumu === "inceleniyor"
+                    ? "Yanıtı Müşteriye Gönder"
+                    : "Onayla ve Gönder"}
               </button>
             </div>
           </section>

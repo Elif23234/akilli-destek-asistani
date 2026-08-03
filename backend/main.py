@@ -684,44 +684,155 @@ def incelenen_talepleri_getir(
         raise HTTPException(status_code=500, detail=f"Veri çekilirken hata oluştu: {str(e)}")
     finally:
         db.close()
-
 # 16. Personel İnceleme ve Müşteriye Gönderim (POST)
 @app.post("/personel/incelenen-yanitla", tags=["Personel Paneli"])
 def incelenen_talebi_yanitla(
     islem: PersonelOnayIslemi,
     admin: dict = Depends(admin_token_dogrula),
 ):
-    """
-    Personelin, YZ'nin kararsız kaldığı talebi inceleyip
-    hazırladığı nihai yanıtı müşteriye gönderdiği endpoint.
-    Durumu 'musteri_yaniti_bekleniyor' statüsüne geçirir.
-    """
     db = SessionLocal()
+
     try:
-        # Yanıtı 'yorumlar' tablosuna müşteri görecek şekilde ekle
-        # ve statüyü 1. ve 2. senaryodaki gibi standart döngüye sok
-        sorgu = text("""
+        temiz_yanit = islem.yanit_metni.strip()
+
+        if not temiz_yanit:
+            raise HTTPException(
+                status_code=400,
+                detail="Gönderilecek yanıt metni boş olamaz."
+            )
+
+        talep_sorgu = text("""
+            SELECT
+                talep_gonderen_ad_soyad,
+                talep_gonderen_eposta,
+                talep_takip_no,
+                talep_baslik
+            FROM talepler
+            WHERE talep_id = :talep_id;
+        """)
+
+        talep_sonucu = db.execute(
+            talep_sorgu,
+            {"talep_id": islem.talep_id}
+        ).first()
+
+        if not talep_sonucu:
+            raise HTTPException(
+                status_code=404,
+                detail="Yanıt gönderilecek talep bulunamadı."
+            )
+
+        talep_bilgisi = dict(talep_sonucu._mapping)
+
+        musteri_eposta = talep_bilgisi.get(
+            "talep_gonderen_eposta"
+        )
+
+        if not musteri_eposta:
+            raise HTTPException(
+                status_code=400,
+                detail="Müşteri e-posta adresi bulunamadı."
+            )
+
+        musteri_adi = (
+            talep_bilgisi.get("talep_gonderen_ad_soyad")
+            or "Değerli Müşterimiz"
+        )
+
+        takip_no = (
+            talep_bilgisi.get("talep_takip_no")
+            or "Belirtilmemiş"
+        )
+
+        talep_basligi = (
+            talep_bilgisi.get("talep_baslik")
+            or "Destek Talebi"
+        )
+
+        eposta_konusu = (
+            f"Destek Talebiniz Yanıtlandı - {takip_no}"
+        )
+
+        eposta_mesaji = f"""Merhaba {musteri_adi},
+
+"{talep_basligi}" başlıklı destek talebiniz incelenmiştir.
+
+Takip Numaranız: {takip_no}
+
+Yanıtımız:
+{temiz_yanit}
+
+Bu e-posta otomatik olarak gönderilmiştir.
+
+Saygılarımızla,
+Akıllı Müşteri Destek Ekibi
+"""
+
+        eposta_gonder(
+            alici_eposta=musteri_eposta,
+            konu=eposta_konusu,
+            mesaj=eposta_mesaji
+        )
+
+        yorum_sorgu = text("""
             CALL sp_talebe_yorum_ekle(
-                :talep_id, :kullanici_id, :mesaj, 'musteri_yaniti_bekleniyor', 'personel'
+                :talep_id,
+                :kullanici_id,
+                :mesaj,
+                'musteri_yaniti_bekleniyor',
+                'personel'
             )
         """)
-        
-        # Log mesajını manuel müdahale olduğunu belirtecek şekilde etiketliyoruz
-        log_mesaji = f"[MANUEL_INCELEME_YANITI]: {islem.yanit_metni}"
-        
-        db.execute(sorgu, {
-            "talep_id": islem.talep_id,
-            "kullanici_id": admin["kullanici_id"],
-            "mesaj": log_mesaji
-        })
-        
+
+        log_mesaji = (
+            f"[MANUEL_INCELEME_YANITI]: {temiz_yanit}"
+        )
+
+        db.execute(
+            yorum_sorgu,
+            {
+                "talep_id": islem.talep_id,
+                "kullanici_id": admin["kullanici_id"],
+                "mesaj": log_mesaji
+            }
+        )
+
         db.commit()
+
         return {
-            "mesaj": "Manuel yanıt sisteme kaydedildi. Müşteri geri bildirimi bekleniyor."
+            "mesaj": (
+                "Manuel yanıt müşteriye e-posta olarak "
+                "gönderildi ve talep müşteri yanıtı "
+                "bekleniyor durumuna geçirildi."
+            ),
+            "gonderilen_eposta": musteri_eposta,
+            "takip_no": takip_no
         }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except smtplib.SMTPAuthenticationError:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Gmail kimlik doğrulaması başarısız oldu. "
+                "SMTP ayarlarını kontrol edin."
+            )
+        )
+
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"İnceleme yanıtı gönderilirken hata: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "İnceleme yanıtı gönderilirken hata oluştu: "
+                f"{str(e)}"
+            )
+        )
+
     finally:
         db.close()
 
