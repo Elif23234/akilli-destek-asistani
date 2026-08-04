@@ -5,7 +5,7 @@ from typing import List
 from sqlalchemy import text
 
 # Proje kök dizinini Python arama yoluna otomatik ekler
-PROJE_KOK = Path(__file__).resolve().parents[1]
+PROJE_KOK = Path(__file__).resolve().parents[1] 
 
 if str(PROJE_KOK) not in sys.path:
     sys.path.insert(0, str(PROJE_KOK))
@@ -13,6 +13,7 @@ if str(PROJE_KOK) not in sys.path:
 from ai_motoru.models import AnalizIstegi
 from ai_motoru.pipeline import talebi_analiz_et
 from database import SessionLocal
+from eposta_service import eposta_gonder
 from services import (
     bildirim_hash_olustur,
     kategori_id_bul,
@@ -109,6 +110,127 @@ def ai_sonucu_isle(
         # Diğer güvenilir talepler otomatik yanıtlanır.
         else:
             yeni_durum = "otomatik_yanitlandi"
+        print(">>> OTOMATİK YANIT BLOĞUNA GİRİLDİ <<<")
+        if yeni_durum == "otomatik_yanitlandi":
+            try:
+                musteri_sorgu = text("""
+                    SELECT
+                        talep_gonderen_ad_soyad,
+                        talep_gonderen_eposta,
+                        talep_takip_no,
+                        talep_baslik
+                    FROM talepler
+                    WHERE talep_id = :talep_id;
+                """)
+
+                musteri_sonucu = db.execute(
+                    musteri_sorgu,
+                    {
+                        "talep_id": talep_id,
+                    },
+                ).first()
+
+                if not musteri_sonucu:
+                    raise RuntimeError(
+                        "Otomatik yanıt gönderilecek talep bulunamadı."
+                    )
+
+                musteri_bilgisi = dict(
+                    musteri_sonucu._mapping
+                )
+
+                musteri_eposta = (
+                    musteri_bilgisi.get(
+                        "talep_gonderen_eposta"
+                    )
+                    or ""
+                ).strip()
+
+                if not musteri_eposta:
+                    raise RuntimeError(
+                        "Talebe ait müşteri e-posta adresi bulunamadı."
+                    )
+
+                musteri_adi = (
+                    musteri_bilgisi.get(
+                        "talep_gonderen_ad_soyad"
+                    )
+                    or "Değerli Müşterimiz"
+                )
+
+                takip_no = (
+                    musteri_bilgisi.get(
+                        "talep_takip_no"
+                    )
+                    or "Belirtilmemiş"
+                )
+
+                talep_basligi = (
+                    musteri_bilgisi.get(
+                        "talep_baslik"
+                    )
+                    or baslik
+                )
+
+                cozuldu_linki = (
+                    "http://localhost:5173/"
+                    "musteri-onayi"
+                    f"?talep_id={talep_id}"
+                    "&sonuc=evet"
+                )
+
+                cozulmedi_linki = (
+                    "http://localhost:5173/"
+                    "musteri-onayi"
+                    f"?talep_id={talep_id}"
+                    "&sonuc=hayir"
+                )
+
+                eposta_konusu = (
+                    "Destek Talebiniz Otomatik "
+                    f"Yanıtlandı - {takip_no}"
+                )
+
+                eposta_mesaji = f"""Merhaba {musteri_adi},
+
+"{talep_basligi}" başlıklı destek talebiniz yapay zekâ destekli sistemimiz tarafından değerlendirilmiştir.
+
+Takip Numaranız: {takip_no}
+
+Yapay Zekâ Yanıtı:
+{onerilen_cevap}
+
+Lütfen çözüm durumunu belirtin:
+
+Sorunum çözüldü:
+{cozuldu_linki}
+
+Sorunum devam ediyor:
+{cozulmedi_linki}
+
+Bu yanıt yapay zekâ tarafından otomatik olarak oluşturulmuştur.
+
+Saygılarımızla,
+Akıllı Müşteri Destek Ekibi
+"""
+
+                eposta_gonder(
+                    alici_eposta=musteri_eposta,
+                    konu=eposta_konusu,
+                    mesaj=eposta_mesaji,
+                )
+
+                print(
+                    "Yapay zekâ otomatik e-postası "
+                    f"gönderildi: {takip_no}"
+                )
+
+            except Exception as eposta_hatasi:
+                   print("EPOSTA HATASI")
+                   print(eposta_hatasi)
+
+                   yeni_durum = "inceleniyor"
+
 
         # 5. Veritabanındaki ilgili talep kaydını ve YZ analizini güncelle/kaydet
         talep_sorgu = text("""

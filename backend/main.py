@@ -18,7 +18,7 @@ from security import (
     admin_token_olustur,
     admin_token_dogrula,
 )
-
+from eposta_service import eposta_gonder
 load_dotenv()
 
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -27,26 +27,7 @@ SMTP_EMAIL = os.getenv("SMTP_EMAIL")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 
-def eposta_gonder(alici_eposta: str, konu: str, mesaj: str):
-    if not SMTP_EMAIL or not SMTP_PASSWORD:
-        raise RuntimeError(
-            "SMTP_EMAIL veya SMTP_PASSWORD .env dosyasında tanımlı değil."
-        )
 
-    eposta = MIMEMultipart()
-    eposta["From"] = SMTP_EMAIL
-    eposta["To"] = alici_eposta
-    eposta["Subject"] = konu
-    eposta.attach(MIMEText(mesaj, "plain", "utf-8"))
-
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-        print("SMTP_EMAIL:", repr(SMTP_EMAIL))
-        print("SMTP_PASSWORD uzunluğu:", len(SMTP_PASSWORD or ""))
-        smtp.login(SMTP_EMAIL, SMTP_PASSWORD)
-        smtp.send_message(eposta)
 
 
 app = FastAPI(title="Akıllı Destek Asistanı API")
@@ -1299,7 +1280,7 @@ def dashboard_istatistikleri(
 
     finally:
         db.close()
-# 20. Dashboard - Geciken Talepler (GET)
+ #20. Dashboard - Geciken Talepler (GET)
 @app.get(
     "/dashboard/geciken-talepler",
     tags=["Dashboard"],
