@@ -254,14 +254,17 @@ def ai_sonucu_isle(
                         )
 
                     else:
-                        basarili = telegram_mesaji_gonder(
-                            talep_id,
-                            talep_takip_no,
-                            baslik,
-                            oncelik_seviyesi,
-                        )
+                               basarili = telegram_mesaji_gonder(
+                               talep_id=talep_id,
+                               talep_takip_no=talep_takip_no,
+                               baslik=baslik,
+                               oncelik=oncelik_seviyesi,
+                               kategori=kategori_adi,
+                               duygu_durumu=duygu_durumu,
+                               ai_ozeti=analiz_sonucu.ozet,
+                                  )
 
-                        if basarili:
+                    if basarili:
                             # Telegram başarılıysa talebi bildirildi yap.
                             bildirildi_guncelle_sorgu = text("""
                                 UPDATE talepler
@@ -303,7 +306,7 @@ def ai_sonucu_isle(
                                 f"{talep_takip_no}"
                             )
 
-                        else:
+                    else:
                             print(
                                 "Telegram bildirimi gönderilemedi. "
                                 "talep_bildirildi değeri FALSE kaldı."

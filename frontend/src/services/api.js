@@ -295,3 +295,38 @@ export async function getGecikenTalepler() {
 
   return sonuc;
 }
+export async function musteriCozumOnayiGonder({
+  talepId,
+  cozulduMu,
+}) {
+  const response = await fetch(
+    `${API_URL}/talepler/musteri-onayi`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        talep_id: talepId,
+        cozuldu_mu: cozulduMu,
+      }),
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Müşteri onayı gönderilemedi."
+    );
+  }
+
+  return sonuc;
+}

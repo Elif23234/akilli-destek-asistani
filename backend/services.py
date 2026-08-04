@@ -10,17 +10,27 @@ load_dotenv()
 PANEL_URL = "http://localhost:5173"
 
 
-def kategori_id_bul(db: Session, kategori_adi: str) -> int:
+def kategori_id_bul(
+    db: Session,
+    kategori_adi: str,
+) -> int:
     """
-    Yapay zekadan gelen kategori adını veritabanındaki ID ile eşleştirir.
+    Yapay zekadan gelen kategori adını
+    veritabanındaki ID ile eşleştirir.
     """
     sorgu = text(
-        "SELECT kategori_id FROM kategoriler WHERE kategori_ad = :k_adi"
+        """
+        SELECT kategori_id
+        FROM kategoriler
+        WHERE kategori_ad = :k_adi
+        """
     )
 
     sonuc = db.execute(
         sorgu,
-        {"k_adi": kategori_adi}
+        {
+            "k_adi": kategori_adi,
+        },
     ).scalar()
 
     if sonuc:
@@ -33,59 +43,160 @@ def telegram_mesaji_gonder(
     talep_id: str,
     talep_takip_no: str,
     baslik: str,
-    oncelik: str
-):
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    oncelik: str,
+    kategori: str = "",
+    duygu_durumu: str = "",
+    ai_ozeti: str = "",
+) -> bool:
+    bot_token = os.getenv(
+        "TELEGRAM_BOT_TOKEN"
+    )
+    chat_id = os.getenv(
+        "TELEGRAM_CHAT_ID"
+    )
 
     if not bot_token or not chat_id:
+        print(
+            "Telegram token veya chat ID bulunamadı."
+        )
         return False
 
-    panel_url = "http://localhost:5173"
+    temiz_takip_no = (
+        talep_takip_no or "Belirtilmemiş"
+    ).strip()
 
-    # Örneğin #4835 değerini URL için %234835 haline getirir
-    takip_no_url = talep_takip_no.replace("#", "%23")
+    temiz_baslik = (
+        baslik or "Başlık bulunmuyor"
+    ).strip()
 
-    talep_linki = f"{panel_url}/talep-detay/{takip_no_url}"
+    temiz_oncelik = (
+        oncelik or "Belirtilmemiş"
+    ).strip()
+
+    temiz_kategori = (
+        kategori or "Belirtilmemiş"
+    ).strip()
+
+    temiz_duygu = (
+        duygu_durumu or "Belirtilmemiş"
+    ).strip()
+
+    temiz_ozet = (
+        ai_ozeti or
+        "Bu talep için AI özeti oluşturulmamış."
+    ).strip()
+
+    takip_no_url = temiz_takip_no.replace(
+        "#",
+        "%23",
+    )
+
+    talep_linki = (
+        f"{PANEL_URL}/talep-detay/"
+        f"{takip_no_url}"
+    )
+
+    oncelik_kucuk = (
+        temiz_oncelik
+        .lower()
+        .replace("İ", "i")
+    )
+
+    if oncelik_kucuk in (
+        "kritik",
+        "acil",
+    ):
+        onerilen_islem = (
+            "Talebin öncelikli olarak ele alınması "
+            "gerekmektedir."
+        )
+    elif oncelik_kucuk in (
+        "yüksek",
+        "yuksek",
+    ):
+        onerilen_islem = (
+            "Talep en kısa sürede "
+            "değerlendirilmelidir."
+        )
+    else:
+        onerilen_islem = (
+            "Talep normal iş akışında "
+            "değerlendirilebilir."
+        )
 
     mesaj = f"""
 🚨 ACİL DESTEK TALEBİ
 
-Takip No:
-{talep_takip_no}
+📌 Takip No:
+{temiz_takip_no}
 
-Talep ID:
-{talep_id}
+📂 Kategori:
+{temiz_kategori}
 
-Başlık:
-{baslik}
+😠 Duygu Durumu:
+{temiz_duygu}
 
-Öncelik:
-{oncelik}
+📝 Başlık:
+{temiz_baslik}
+
+🔥 Öncelik:
+{temiz_oncelik}
+
+🤖 AI Özeti:
+{temiz_ozet}
+
+⚠️ Önerilen İşlem:
+{onerilen_islem}
 
 🔗 Talebi Aç:
 {talep_linki}
-"""
+""".strip()
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    url = (
+        "https://api.telegram.org/"
+        f"bot{bot_token}/sendMessage"
+    )
 
     try:
         response = requests.post(
             url,
             data={
                 "chat_id": chat_id,
-                "text": mesaj
+                "text": mesaj,
             },
-            timeout=10
+            timeout=10,
         )
 
-        return response.status_code == 200
+        if response.status_code != 200:
+            print(
+                "Telegram bildirimi gönderilemedi. "
+                f"Durum kodu: {response.status_code}"
+            )
+            print(
+                f"Telegram cevabı: {response.text}"
+            )
+            return False
 
-    except Exception as e:
-        print(f"Telegram gönderilemedi: {e}")
+        return True
+
+    except requests.RequestException as hata:
+        print(
+            "Telegram isteği sırasında hata oluştu: "
+            f"{hata}"
+        )
         return False
 
-def bildirim_hash_olustur(talep_id: str):
+    except Exception as hata:
+        print(
+            "Telegram gönderilemedi: "
+            f"{hata}"
+        )
+        return False
+
+
+def bildirim_hash_olustur(
+    talep_id: str,
+) -> str:
     return hashlib.sha256(
         f"{talep_id}-telegram".encode()
     ).hexdigest()
