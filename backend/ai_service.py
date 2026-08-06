@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from typing import List
 
+from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 # Proje kök dizinini Python arama yoluna otomatik ekler
@@ -21,8 +22,59 @@ from services import (
 )
 
 RISKLI_KATEGORILER: List[int] = [1, 3, 4, 7, 8]
+def en_az_yuku_olan_personeli_bul(db: Session):
+    sorgu = text("""
+        SELECT
+            k.kullanici_id
+        FROM kullanicilar k
+        LEFT JOIN talepler t
+            ON t.talep_atanan_personel_id =
+               k.kullanici_id
+           AND LOWER(TRIM(t.talep_durum))
+               NOT IN (
+                    'cozuldu',
+                    'kapali'
+               )
+              WHERE LOWER(TRIM(k.kullanici_rol)) = 'personel'
+  AND LOWER(TRIM(k.kullanici_ad_soyad))
+      <> 'sistem personeli'
+        GROUP BY
+            k.kullanici_id,
+            k.kullanici_olusturulma_tarihi
+        ORDER BY
+            COUNT(t.talep_id) ASC,
+            k.kullanici_olusturulma_tarihi ASC
+        LIMIT 1;
+    """)
 
+    return db.execute(sorgu).scalar()
 
+def en_az_yuku_olan_personeli_bul(
+    db,
+) -> str | None:
+    sorgu = text("""
+        SELECT
+            k.kullanici_id
+        FROM kullanicilar k
+        LEFT JOIN talepler t
+            ON t.talep_atanan_personel_id =
+                k.kullanici_id
+           AND LOWER(TRIM(t.talep_durum)) NOT IN (
+                'cozuldu',
+                'kapali'
+           )
+        WHERE LOWER(TRIM(k.kullanici_rol)) =
+            'personel'
+        GROUP BY
+            k.kullanici_id,
+            k.kullanici_olusturulma_tarihi
+        ORDER BY
+            COUNT(t.talep_id) ASC,
+            k.kullanici_olusturulma_tarihi ASC
+        LIMIT 1;
+    """)
+
+    return db.execute(sorgu).scalar()
 # Tekrar eden talep kontrolü
 def tekrar_eden_talep_kontrol(
     db,
@@ -92,6 +144,7 @@ def ai_sonucu_isle(
 
         # 4. Riskli kategori kontrolü ve etiketleme
         riskli_mi = kategori_id in RISKLI_KATEGORILER
+        
 
         # --- HİBRİT YÖNLENDİRME MANTIĞI ---
 
@@ -110,6 +163,17 @@ def ai_sonucu_isle(
         # Diğer güvenilir talepler otomatik yanıtlanır.
         else:
             yeni_durum = "otomatik_yanitlandi"
+
+        if yeni_durum in (
+    "inceleniyor",
+    "onay_bekliyor",
+):
+              atanan_personel_id = (
+        en_az_yuku_olan_personeli_bul(db)
+    )
+        else:
+          atanan_personel_id = None 
+          
         print(">>> OTOMATİK YANIT BLOĞUNA GİRİLDİ <<<")
         if yeni_durum == "otomatik_yanitlandi":
             try:
@@ -234,20 +298,28 @@ Akıllı Müşteri Destek Ekibi
 
         # 5. Veritabanındaki ilgili talep kaydını ve YZ analizini güncelle/kaydet
         talep_sorgu = text("""
-            UPDATE talepler
-            SET talep_kategori_id = :kategori_id,
-                talep_durum = :yeni_durum
-            WHERE talep_id = :talep_id
-        """)
-
+    UPDATE talepler
+    SET
+        talep_kategori_id = :kategori_id,
+        talep_durum = :yeni_durum,
+        talep_atanan_personel_id =
+            :atanan_personel_id
+    WHERE talep_id = :talep_id
+""")
+        print(
+    "Otomatik atanan personel ID:",
+    atanan_personel_id,
+)
         db.execute(
-            talep_sorgu,
-            {
-                "kategori_id": kategori_id,
-                "yeni_durum": yeni_durum,
-                "talep_id": talep_id,
-            },
-        )
+    talep_sorgu,
+    {
+        "kategori_id": kategori_id,
+        "yeni_durum": yeni_durum,
+        "atanan_personel_id":
+            atanan_personel_id,
+        "talep_id": talep_id,
+    },
+)
 
         analiz_sorgu = text("""
             INSERT INTO yz_analizleri (

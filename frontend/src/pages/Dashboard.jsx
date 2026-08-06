@@ -99,6 +99,35 @@ function Dashboard() {
   const kategoriDagilimi =
     dashboardVerisi?.kategori_dagilimi ||
     [];
+  
+  const personelDagilimi =
+    dashboardVerisi?.personel_dagilimi ||
+    [];
+
+  const aktifPersonelDagilimi =
+    personelDagilimi.filter((personel) => {
+      const talepSayisi =
+        Number(personel.talep_sayisi) || 0;
+
+      const personelAdi =
+        personel.personel_adi
+          ?.toLocaleLowerCase("tr-TR")
+          .trim();
+
+      return (
+        talepSayisi > 0 &&
+        personelAdi !== "sistem personeli"
+      );
+    });
+
+  const enYuksekPersonelTalepSayisi =
+    Math.max(
+      ...aktifPersonelDagilimi.map(
+        (personel) =>
+          Number(personel.talep_sayisi) || 0
+      ),
+      1
+    );
 
   if (yukleniyor) {
     return (
@@ -490,7 +519,87 @@ function Dashboard() {
           </div>
         )}
       </article>
+<article className="dashboard-bilgi-karti personel-is-yuku-karti">
+  <div className="bilgi-karti-baslik">
+    <div className="bilgi-baslik-ikonu personel-yuku-ikonu">
+      👥
+    </div>
 
+    <div>
+      <span>Personel performansı</span>
+      <h3>Personel İş Yükü</h3>
+    </div>
+  </div>
+
+  {aktifPersonelDagilimi.length === 0 ? (
+    <div className="kategori-bos-alani">
+      <div>👤</div>
+
+      <h4>Personel verisi bulunamadı</h4>
+
+      <p>
+        Personellere talep atandığında iş yükü
+        dağılımı burada görünecek.
+      </p>
+    </div>
+  ) : (
+    <div className="personel-yuku-listesi">
+      {aktifPersonelDagilimi.map((personel) => {
+        const talepSayisi =
+          Number(personel.talep_sayisi) || 0;
+
+        const cubukGenisligi =
+          (talepSayisi /
+            enYuksekPersonelTalepSayisi) *
+          100;
+
+        return (
+          <div
+            className="personel-yuku-satiri"
+            key={personel.personel_id}
+          >
+            <div className="personel-yuku-bilgisi">
+              <div className="personel-yuku-avatar">
+                {personel.personel_adi
+                  ?.charAt(0)
+                  .toLocaleUpperCase("tr-TR") ||
+                  "P"}
+              </div>
+
+              <div className="personel-yuku-metin">
+                <strong>
+                  {personel.personel_adi
+                    ? personel.personel_adi
+                        .split("(")[0]
+                        .trim()
+                    : "İsimsiz Personel"}
+                </strong>
+
+                <span>
+                  Atanmış destek talepleri
+                </span>
+              </div>
+
+              <div className="personel-yuku-sayisi">
+                <strong>{talepSayisi}</strong>
+                <span>Talep</span>
+              </div>
+            </div>
+
+            <div className="personel-yuku-cubuk-alani">
+              <div
+                className="personel-yuku-cubugu"
+                style={{
+                  width: `${cubukGenisligi}%`,
+                }}
+              ></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</article>
       <div className="dashboard-alt-grid">
         <article className="dashboard-bilgi-karti">
           <div className="bilgi-karti-baslik">

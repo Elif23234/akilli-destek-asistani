@@ -12,6 +12,9 @@ from fastapi.security import (
 )
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+from sqlalchemy import text
+
+from database import SessionLocal
 
 
 load_dotenv()
@@ -163,6 +166,151 @@ def admin_token_dogrula(
 
     return {
         "kullanici_adi": kullanici_adi,
+        "rol": rol,
+        "kullanici_id": kullanici_id,
+    }
+def personel_bilgilerini_dogrula(
+    eposta: str,
+    sifre: str,
+) -> dict | None:
+    db = SessionLocal()
+
+    try:
+        sorgu = text("""
+            SELECT
+                kullanici_id,
+                kullanici_eposta,
+                kullanici_ad_soyad,
+                kullanici_rol,
+                kullanici_sifre_hash
+            FROM kullanicilar
+            WHERE LOWER(TRIM(kullanici_eposta))
+                = LOWER(TRIM(:eposta))
+              AND LOWER(TRIM(kullanici_rol))
+                = 'personel'
+            LIMIT 1;
+        """)
+
+        sonuc = db.execute(
+            sorgu,
+            {
+                "eposta": eposta,
+            },
+        ).first()
+
+        if not sonuc:
+            return None
+
+        personel = dict(
+            sonuc._mapping
+        )
+
+        try:
+            sifre_dogru = password_hash.verify(
+                sifre,
+                personel["kullanici_sifre_hash"],
+            )
+        except Exception:
+            sifre_dogru = False
+
+        if not sifre_dogru:
+            return None
+
+        return {
+            "kullanici_id":
+                str(personel["kullanici_id"]),
+            "kullanici_eposta":
+                personel["kullanici_eposta"],
+            "kullanici_ad_soyad":
+                personel["kullanici_ad_soyad"],
+            "rol":
+                personel["kullanici_rol"],
+        }
+
+    finally:
+        db.close()
+
+
+def personel_token_olustur(
+    personel: dict,
+) -> str:
+    sona_erme_zamani = (
+        datetime.now(timezone.utc)
+        + timedelta(
+            minutes=ADMIN_TOKEN_SURE_DAKIKA
+        )
+    )
+
+    token_verisi = {
+        "sub": personel["kullanici_eposta"],
+        "rol": "personel",
+        "kullanici_id":
+            personel["kullanici_id"],
+        "ad_soyad":
+            personel["kullanici_ad_soyad"],
+        "exp": sona_erme_zamani,
+    }
+
+    return jwt.encode(
+        token_verisi,
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+def personel_token_dogrula(
+    kimlik: HTTPAuthorizationCredentials
+    | None = Depends(bearer_guvenligi),
+) -> dict:
+    yetkisiz_hatasi = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=(
+            "Personel oturumu bulunamadı "
+            "veya oturumun süresi doldu."
+        ),
+        headers={
+            "WWW-Authenticate": "Bearer",
+        },
+    )
+
+    if kimlik is None:
+        raise yetkisiz_hatasi
+
+    if kimlik.scheme.lower() != "bearer":
+        raise yetkisiz_hatasi
+
+    try:
+        token_verisi = jwt.decode(
+            kimlik.credentials,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+        )
+    except InvalidTokenError:
+        raise yetkisiz_hatasi
+
+    eposta = token_verisi.get("sub")
+    rol = token_verisi.get("rol")
+    kullanici_id = token_verisi.get(
+        "kullanici_id"
+    )
+    ad_soyad = token_verisi.get(
+        "ad_soyad"
+    )
+
+    if not eposta:
+        raise yetkisiz_hatasi
+
+    if rol != "personel":
+        raise yetkisiz_hatasi
+
+    try:
+        UUID(str(kullanici_id))
+    except (ValueError, TypeError):
+        raise yetkisiz_hatasi
+
+    return {
+        "kullanici_eposta": eposta,
+        "kullanici_ad_soyad": ad_soyad,
         "rol": rol,
         "kullanici_id": kullanici_id,
     }

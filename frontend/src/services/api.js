@@ -1,7 +1,10 @@
 const API_URL = "http://127.0.0.1:8000";
 
+
 function getAuthHeaders() {
-  const token = sessionStorage.getItem("admin_token");
+  const token = sessionStorage.getItem(
+    "admin_token"
+  );
 
   if (!token) {
     return {};
@@ -11,6 +14,22 @@ function getAuthHeaders() {
     Authorization: `Bearer ${token}`,
   };
 }
+
+
+function getPersonelAuthHeaders() {
+  const token = sessionStorage.getItem(
+    "personel_token"
+  );
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 
 export async function getTalepler() {
   const response = await fetch(
@@ -23,13 +42,18 @@ export async function getTalepler() {
   );
 
   if (!response.ok) {
-    throw new Error("Talepler alınamadı.");
+    throw new Error(
+      "Talepler alınamadı."
+    );
   }
 
   return response.json();
 }
 
-export async function getTalepDetayi(takipNo) {
+
+export async function getTalepDetayi(
+  takipNo
+) {
   const response = await fetch(
     `${API_URL}/talepler/${encodeURIComponent(
       takipNo
@@ -42,13 +66,18 @@ export async function getTalepDetayi(takipNo) {
   );
 
   if (!response.ok) {
-    throw new Error("Talep detayı alınamadı.");
+    throw new Error(
+      "Talep detayı alınamadı."
+    );
   }
 
   return response.json();
 }
 
-export async function getBenzerTalepler(kelime) {
+
+export async function getBenzerTalepler(
+  kelime
+) {
   const response = await fetch(
     `${API_URL}/talepler/rag/arama?kelime=${encodeURIComponent(
       kelime
@@ -61,11 +90,14 @@ export async function getBenzerTalepler(kelime) {
   );
 
   if (!response.ok) {
-    throw new Error("Benzer talepler alınamadı.");
+    throw new Error(
+      "Benzer talepler alınamadı."
+    );
   }
 
   return response.json();
 }
+
 
 export async function getDashboardIstatistikleri() {
   const response = await fetch(
@@ -86,6 +118,7 @@ export async function getDashboardIstatistikleri() {
   return response.json();
 }
 
+
 export async function yeniTalepOlustur(
   talepBilgileri
 ) {
@@ -94,9 +127,12 @@ export async function yeniTalepOlustur(
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
       },
-      body: JSON.stringify(talepBilgileri),
+      body: JSON.stringify(
+        talepBilgileri
+      ),
     }
   );
 
@@ -110,12 +146,14 @@ export async function yeniTalepOlustur(
 
   if (!response.ok) {
     throw new Error(
-      sonuc.detail || "Talep oluşturulamadı."
+      sonuc.detail ||
+        "Talep oluşturulamadı."
     );
   }
 
   return sonuc;
 }
+
 
 export async function adminGirisi(
   kullaniciAdi,
@@ -126,10 +164,12 @@ export async function adminGirisi(
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
       },
       body: JSON.stringify({
-        kullanici_adi: kullaniciAdi,
+        kullanici_adi:
+          kullaniciAdi,
         sifre: sifre,
       }),
     }
@@ -153,6 +193,7 @@ export async function adminGirisi(
   return sonuc;
 }
 
+
 export async function personelOnaylaVeGonder({
   talepId,
   yanitMetni,
@@ -163,8 +204,10 @@ export async function personelOnaylaVeGonder({
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
+        "Content-Type":
+          "application/json",
+
+        ...getPersonelAuthHeaders(),
       },
       body: JSON.stringify({
         talep_id: talepId,
@@ -186,23 +229,26 @@ export async function personelOnaylaVeGonder({
 
   if (!response.ok) {
     throw new Error(
-      sonuc.detail || "Yanıt onaylanamadı."
+      sonuc.detail ||
+        "Yanıt onaylanamadı."
     );
   }
 
   return sonuc;
 }
 
+
 export async function talebiYapayZekaIleAnalizEt({
   talepId,
   baslik,
   icerik,
 }) {
-  const parametreler = new URLSearchParams({
-    talep_id: talepId,
-    baslik: baslik,
-    icerik: icerik,
-  });
+  const parametreler =
+    new URLSearchParams({
+      talep_id: talepId,
+      baslik: baslik,
+      icerik: icerik,
+    });
 
   const response = await fetch(
     `${API_URL}/talepler/yapay-zeka-analiz?${parametreler.toString()}`,
@@ -231,6 +277,8 @@ export async function talebiYapayZekaIleAnalizEt({
 
   return sonuc;
 }
+
+
 export async function incelenenTalebiYanitla({
   talepId,
   yanitMetni,
@@ -240,13 +288,16 @@ export async function incelenenTalebiYanitla({
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
+        "Content-Type":
+          "application/json",
+
+        ...getPersonelAuthHeaders(),
       },
       body: JSON.stringify({
         talep_id: talepId,
         yanit_metni: yanitMetni,
-        islem_tipi: "MANUEL_INCELEME_YANITI",
+        islem_tipi:
+          "MANUEL_INCELEME_YANITI",
       }),
     }
   );
@@ -268,6 +319,8 @@ export async function incelenenTalebiYanitla({
 
   return sonuc;
 }
+
+
 export async function getGecikenTalepler() {
   const response = await fetch(
     `${API_URL}/dashboard/geciken-talepler`,
@@ -295,6 +348,8 @@ export async function getGecikenTalepler() {
 
   return sonuc;
 }
+
+
 export async function musteriCozumOnayiGonder({
   talepId,
   cozulduMu,
@@ -304,7 +359,8 @@ export async function musteriCozumOnayiGonder({
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
       },
       body: JSON.stringify({
         talep_id: talepId,
@@ -325,6 +381,173 @@ export async function musteriCozumOnayiGonder({
     throw new Error(
       sonuc.detail ||
         "Müşteri onayı gönderilemedi."
+    );
+  }
+
+  return sonuc;
+}
+
+
+export async function personelGirisi(
+  eposta,
+  sifre
+) {
+  const response = await fetch(
+    `${API_URL}/personel/giris`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify({
+        eposta: eposta,
+        sifre: sifre,
+      }),
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Personel girişi yapılamadı."
+    );
+  }
+
+  return sonuc;
+}
+
+
+export async function getPersonelTaleplerim() {
+  const response = await fetch(
+    `${API_URL}/personel/taleplerim`,
+    {
+      headers: {
+        ...getPersonelAuthHeaders(),
+      },
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Personele atanmış talepler alınamadı."
+    );
+  }
+
+  return sonuc;
+}
+
+
+export async function getPersonelTalepDetayi(
+  talepId
+) {
+  const response = await fetch(
+    `${API_URL}/personel/talep/${encodeURIComponent(
+      talepId
+    )}`,
+    {
+      headers: {
+        ...getPersonelAuthHeaders(),
+      },
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Talep detayı alınamadı."
+    );
+  }
+
+  return sonuc;
+}
+export async function getAdminPersonelleri() {
+  const response = await fetch(
+    `${API_URL}/admin/personeller`,
+    {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Personel listesi alınamadı."
+    );
+  }
+
+  return sonuc;
+}
+
+
+export async function adminTalebiDevret({
+  talepId,
+  yeniPersonelId,
+}) {
+  const response = await fetch(
+    `${API_URL}/admin/talep-devret`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({
+        talep_id: talepId,
+        yeni_personel_id:
+          yeniPersonelId,
+      }),
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Talep devredilemedi."
     );
   }
 

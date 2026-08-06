@@ -6,15 +6,26 @@ import {
 import "./styles/Layout.css";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import PersonelProtectedRoute
+  from "./components/PersonelProtectedRoute";
+
 import AdminLayout from "./layouts/AdminLayout";
 
 import AnaSayfa from "./pages/AnaSayfa";
 import AdminGiris from "./pages/AdminGiris";
+import PersonelGiris from "./pages/PersonelGiris";
+
 import Dashboard from "./pages/Dashboard";
 import MusteriOnayi from "./pages/MusteriOnayi";
 import SikayetFormu from "./pages/SikayetFormu";
 import TalepDetay from "./pages/TalepDetay";
 import TalepListesi from "./pages/TalepListesi";
+
+import PersonelPaneli
+  from "./pages/PersonelPaneli";
+
+import PersonelTalepDetay
+  from "./pages/PersonelTalepDetay";
 
 function App() {
   return (
@@ -47,6 +58,12 @@ function App() {
         element={<AdminGiris />}
       />
 
+      {/* Personel giriş ekranı */}
+      <Route
+        path="/personel-giris"
+        element={<PersonelGiris />}
+      />
+
       {/* Korunan yönetici sayfaları */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
@@ -65,6 +82,19 @@ function App() {
             element={<TalepDetay />}
           />
         </Route>
+      </Route>
+
+      {/* Korunan personel sayfaları */}
+      <Route element={<PersonelProtectedRoute />}>
+        <Route
+          path="/personel-paneli"
+          element={<PersonelPaneli />}
+        />
+
+        <Route
+          path="/personel-talep/:talepId"
+          element={<PersonelTalepDetay />}
+        />
       </Route>
     </Routes>
   );

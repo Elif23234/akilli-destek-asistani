@@ -6,6 +6,8 @@ import {
 } from "react-router-dom";
 
 import {
+  adminTalebiDevret,
+  getAdminPersonelleri,
   getTalepDetayi,
   getBenzerTalepler,
   incelenenTalebiYanitla,
@@ -56,6 +58,30 @@ function TalepDetay() {
     useState("");
 
   const [aiAnalizHatasi, setAiAnalizHatasi] =
+    useState("");
+
+  const [personeller, setPersoneller] =
+    useState([]);
+
+  const [
+    secilenPersonelId,
+    setSecilenPersonelId,
+  ] = useState("");
+
+  const [
+    personellerYukleniyor,
+    setPersonellerYukleniyor,
+  ] = useState(false);
+
+  const [
+    devretmeYapiliyor,
+    setDevretmeYapiliyor,
+  ] = useState(false);
+
+  const [devretmeMesaji, setDevretmeMesaji] =
+    useState("");
+
+  const [devretmeHatasi, setDevretmeHatasi] =
     useState("");
 
   useEffect(() => {
@@ -111,6 +137,30 @@ function TalepDetay() {
 
   talepDetayiniYukle();
 }, [takipNo]);
+
+  useEffect(() => {
+    async function personelleriYukle() {
+      try {
+        setPersonellerYukleniyor(true);
+        setDevretmeHatasi("");
+
+        const sonuc =
+          await getAdminPersonelleri();
+
+        setPersoneller(
+          sonuc.veri || []
+        );
+      } catch (error) {
+        setDevretmeHatasi(
+          error.message
+        );
+      } finally {
+        setPersonellerYukleniyor(false);
+      }
+    }
+
+    personelleriYukle();
+  }, []);
   async function benzerTalepleriYukle(
     aramaMetni,
     mevcutTakipNo
@@ -172,6 +222,52 @@ function TalepDetay() {
       );
     } finally {
       setBenzerlerYukleniyor(false);
+    }
+  }
+
+  async function talebiDevret() {
+    if (!talep?.talep_id) {
+      setDevretmeHatasi(
+        "Talep kimliği bulunamadı."
+      );
+      return;
+    }
+
+    if (!secilenPersonelId) {
+      setDevretmeHatasi(
+        "Lütfen yeni personeli seçin."
+      );
+      return;
+    }
+
+    try {
+      setDevretmeYapiliyor(true);
+      setDevretmeMesaji("");
+      setDevretmeHatasi("");
+
+      const sonuc =
+        await adminTalebiDevret({
+          talepId: talep.talep_id,
+          yeniPersonelId:
+            secilenPersonelId,
+        });
+
+      setDevretmeMesaji(
+        sonuc.mesaj ||
+          "Talep başarıyla devredildi."
+      );
+
+      setSecilenPersonelId("");
+
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      setDevretmeHatasi(
+        error.message
+      );
+    } finally {
+      setDevretmeYapiliyor(false);
     }
   }
 
@@ -1062,6 +1158,107 @@ function TalepDetay() {
             </div>
           </section>
         )}
+
+        <section className="detay-karti talep-devretme-bolumu">
+          <div className="detay-kart-basligi">
+            <div className="detay-kart-ikon mor-ikon">
+              🔁
+            </div>
+
+            <div>
+              <span>Yönetici işlemi</span>
+              <h2>Talebi Devret</h2>
+            </div>
+          </div>
+
+          <p>
+            Bu talebi başka bir destek personeline
+            aktarabilirsiniz.
+          </p>
+
+          <label
+            className="yanit-metin-etiketi"
+            htmlFor="yeni-personel-secimi"
+          >
+            Yeni personel
+          </label>
+
+          <select
+            id="yeni-personel-secimi"
+            className="talep-devretme-select"
+            value={secilenPersonelId}
+            onChange={(event) => {
+              setSecilenPersonelId(
+                event.target.value
+              );
+              setDevretmeMesaji("");
+              setDevretmeHatasi("");
+            }}
+            disabled={
+              personellerYukleniyor ||
+              devretmeYapiliyor ||
+              temizTalepDurumu === "cozuldu"
+            }
+          >
+            <option value="">
+              {personellerYukleniyor
+                ? "Personeller yükleniyor..."
+                : "Personel seçiniz"}
+            </option>
+
+            {personeller.map((personel) => (
+              <option
+                key={personel.kullanici_id}
+                value={personel.kullanici_id}
+              >
+                {personel.kullanici_ad_soyad}
+              </option>
+            ))}
+          </select>
+
+          {temizTalepDurumu === "cozuldu" && (
+            <div className="onay-bildirim onay-hata">
+              ⚠️ Çözülmüş talepler başka personele
+              devredilemez.
+            </div>
+          )}
+
+          {devretmeHatasi && (
+            <div className="onay-bildirim onay-hata">
+              ⚠️ {devretmeHatasi}
+            </div>
+          )}
+
+          {devretmeMesaji && (
+            <div className="onay-bildirim onay-basarili">
+              ✅ {devretmeMesaji}
+            </div>
+          )}
+
+          <div className="personel-onay-alt-satir">
+            <small>
+              Talep devredildiğinde eski personelin
+              panelinden çıkar ve yeni personelin
+              paneline aktarılır.
+            </small>
+
+            <button
+              type="button"
+              className="yaniti-onayla-butonu"
+              onClick={talebiDevret}
+              disabled={
+                devretmeYapiliyor ||
+                personellerYukleniyor ||
+                !secilenPersonelId ||
+                temizTalepDurumu === "cozuldu"
+              }
+            >
+              {devretmeYapiliyor
+                ? "Devrediliyor..."
+                : "Talebi Devret"}
+            </button>
+          </div>
+        </section>
 
         <section className="detay-karti benzer-talepler-bolumu">
           <div className="benzer-talepler-basligi">

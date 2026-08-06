@@ -17,6 +17,9 @@ from security import (
     admin_bilgilerini_dogrula,
     admin_token_olustur,
     admin_token_dogrula,
+    personel_bilgilerini_dogrula,
+    personel_token_olustur,
+    personel_token_dogrula,
 )
 from eposta_service import eposta_gonder
 load_dotenv()
@@ -50,6 +53,9 @@ class YeniTalep(BaseModel):
 class AdminGiris(BaseModel):
     kullanici_adi: str
     sifre: str
+class PersonelGiris(BaseModel):
+    eposta: str
+    sifre: str
 class YeniYorum(BaseModel):
     talep_id: str
     mesaj: str
@@ -69,6 +75,9 @@ class PersonelOnayIslemi(BaseModel):
     yanit_metni: str
     islem_tipi: str = "AI_YANITI_ONAYLANDI"
 
+class TalepDevretmeIstegi(BaseModel):
+    talep_id: str
+    yeni_personel_id: str
 
 class TalepYonlendirme(BaseModel):
     talep_id: str
@@ -105,6 +114,46 @@ def admin_girisi(giris: AdminGiris):
     }
 
 
+@app.post(
+    "/personel/giris",
+    tags=["Personel"],
+)
+def personel_girisi(
+    giris: PersonelGiris,
+):
+    personel = personel_bilgilerini_dogrula(
+        giris.eposta,
+        giris.sifre,
+    )
+
+    if not personel:
+        raise HTTPException(
+            status_code=401,
+            detail="Personel e-posta adresi veya şifre hatalı.",
+        )
+
+    token = personel_token_olustur(
+        personel
+    )
+
+    return {
+        "mesaj": "Personel girişi başarılı.",
+        "access_token": token,
+        "token_type": "bearer",
+        "personel": {
+            "kullanici_id":
+                personel["kullanici_id"],
+            "kullanici_eposta":
+                personel["kullanici_eposta"],
+            "kullanici_ad_soyad":
+                personel["kullanici_ad_soyad"],
+            "rol":
+                personel["rol"],
+        },
+    }
+
+
+
 @app.get("/admin/token-kontrol", tags=["Admin"])
 def admin_token_kontrol(
     admin: dict = Depends(admin_token_dogrula),
@@ -115,6 +164,381 @@ def admin_token_kontrol(
         "kullanici_id": admin["kullanici_id"],
         "rol": admin["rol"],
     }
+
+@app.get(
+    "/admin/personeller",
+    tags=["Admin"],
+)
+def admin_personelleri_getir(
+    _admin: dict = Depends(
+        admin_token_dogrula
+    ),
+):
+    db = SessionLocal()
+
+    try:
+        sorgu = text("""
+            SELECT
+                kullanici_id,
+                kullanici_ad_soyad,
+                kullanici_eposta,
+                kullanici_rol
+            FROM kullanicilar
+            WHERE LOWER(
+                TRIM(kullanici_rol)
+            ) = 'personel'
+            ORDER BY
+                kullanici_ad_soyad ASC;
+        """)
+
+        sonuc = db.execute(sorgu)
+
+        personeller = [
+            dict(satir._mapping)
+            for satir in sonuc
+        ]
+
+        return {
+            "mesaj": "Personeller başarıyla getirildi.",
+            "veri": personeller,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Personeller alınırken "
+                f"hata oluştu: {str(e)}"
+            ),
+        )
+
+    finally:
+        db.close()
+
+@app.post(
+    "/admin/talep-devret",
+    tags=["Admin"],
+)
+def admin_talebi_devret(
+    veri: TalepDevretmeIstegi,
+    admin: dict = Depends(
+        admin_token_dogrula
+    ),
+):
+    db = SessionLocal()
+
+    try:
+        
+        talep_sorgu = text("""
+        SELECT
+        t.talep_id,
+        t.talep_takip_no,
+        t.talep_durum,
+        t.talep_atanan_personel_id,
+        eski.kullanici_ad_soyad
+            AS eski_personel_adi
+           FROM talepler t
+
+               LEFT JOIN kullanicilar eski
+        ON eski.kullanici_id =
+           t.talep_atanan_personel_id
+
+                WHERE t.talep_id = :talep_id;
+""")
+
+        talep_sonucu = db.execute(
+            talep_sorgu,
+            {
+                "talep_id": veri.talep_id,
+            },
+        ).first()
+
+        if not talep_sonucu:
+            raise HTTPException(
+                status_code=404,
+                detail="Talep bulunamadı.",
+            )
+
+        personel_sorgu = text("""
+            SELECT
+                kullanici_id,
+                kullanici_ad_soyad
+            FROM kullanicilar
+            WHERE kullanici_id =
+                  :personel_id
+              AND LOWER(
+                  TRIM(kullanici_rol)
+              ) = 'personel';
+        """)
+
+        personel_sonucu = db.execute(
+            personel_sorgu,
+            {
+                "personel_id":
+                    veri.yeni_personel_id,
+            },
+        ).first()
+
+        if not personel_sonucu:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Devredilecek yeni personel "
+                    "bulunamadı."
+                ),
+            )
+
+        talep = dict(
+            talep_sonucu._mapping
+        )
+        if talep["talep_durum"] == "cozuldu":
+         raise HTTPException(
+        status_code=400,
+        detail=(
+            "Çözülmüş bir talep "
+            "başka personele devredilemez."
+        ),
+    )
+        yeni_personel = dict(
+            personel_sonucu._mapping
+        )
+
+        mevcut_personel_id = (
+            talep.get(
+                "talep_atanan_personel_id"
+            )
+        )
+
+        if (
+            mevcut_personel_id is not None
+            and str(mevcut_personel_id)
+            == str(veri.yeni_personel_id)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Talep zaten seçilen "
+                    "personele atanmış."
+                ),
+            )
+
+        guncelleme_sorgu = text("""
+            UPDATE talepler
+            SET
+                talep_atanan_personel_id =
+                    :yeni_personel_id,
+                talep_guncellenme_tarihi =
+                    NOW()
+            WHERE talep_id = :talep_id;
+        """)
+
+        db.execute(
+            guncelleme_sorgu,
+            {
+                "talep_id":
+                    veri.talep_id,
+                "yeni_personel_id":
+                    veri.yeni_personel_id,
+            },
+        )
+
+        eski_personel_adi = (
+            talep.get(
+                "eski_personel_adi"
+            )
+            or "Atanmamış"
+        )
+
+        yeni_personel_adi = (
+            yeni_personel[
+                "kullanici_ad_soyad"
+            ]
+        )
+
+        log_mesaji = (
+            "SİSTEM MESAJI: Talep "
+            f"{eski_personel_adi} "
+            "personelinden "
+            f"{yeni_personel_adi} "
+            "personeline devredildi."
+        )
+
+        yorum_sorgu = text("""
+            INSERT INTO yorumlar (
+                yorum_talep_id,
+                yorum_kullanici_id,
+                yorum_mesaj
+            )
+            VALUES (
+                :talep_id,
+                :admin_id,
+                :mesaj
+            );
+        """)
+
+        db.execute(
+            yorum_sorgu,
+            {
+                "talep_id":
+                    veri.talep_id,
+                "admin_id":
+                    admin["kullanici_id"],
+                "mesaj":
+                    log_mesaji,
+            },
+        )
+
+        db.commit()
+
+        return {
+            "mesaj": (
+                "Talep başarıyla "
+                "devredildi."
+            ),
+            "talep_id":
+                veri.talep_id,
+            "takip_no":
+                talep["talep_takip_no"],
+            "eski_personel":
+                eski_personel_adi,
+            "yeni_personel":
+                yeni_personel_adi,
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as e:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Talep devredilirken "
+                f"hata oluştu: {str(e)}"
+            ),
+        )
+
+    finally:
+        db.close()
+
+
+@app.get(
+    "/personel/token-kontrol",
+    tags=["Personel"],
+)
+def personel_token_kontrol(
+    personel: dict = Depends(
+        personel_token_dogrula
+    ),
+):
+    return {
+        "mesaj": "Personel tokenı geçerli.",
+        "kullanici_id":
+            personel["kullanici_id"],
+        "kullanici_eposta":
+            personel["kullanici_eposta"],
+        "kullanici_ad_soyad":
+            personel["kullanici_ad_soyad"],
+        "rol":
+            personel["rol"],
+    }
+
+@app.get(
+    "/personel/taleplerim",
+    tags=["Personel Paneli"],
+)
+def personelin_taleplerini_getir(
+    personel: dict = Depends(
+        personel_token_dogrula
+    ),
+):
+    db = SessionLocal()
+
+    try:
+        sorgu = text("""
+            SELECT
+                t.talep_id,
+                t.talep_takip_no,
+                t.talep_baslik,
+                t.talep_ham_icerik,
+                t.talep_durum,
+                t.talep_kaynak,
+                t.talep_gonderen_ad_soyad,
+                t.talep_gonderen_eposta,
+                t.talep_kategori_id,
+                t.talep_olusturulma_tarihi,
+                t.talep_guncellenme_tarihi,
+
+                k.kategori_ad,
+                k.kategori_departman,
+
+                yz.yz_ozet,
+                yz.yz_oncelik_seviyesi,
+                yz.yz_duygu_durumu,
+                yz.yz_guven_skoru,
+                yz.yz_cozum_onerisi,
+                yz.yz_musteri_cevabi
+
+            FROM talepler t
+
+            LEFT JOIN kategoriler k
+                ON k.kategori_id =
+                   t.talep_kategori_id
+
+            LEFT JOIN yz_analizleri yz
+                ON yz.yz_talep_id =
+                   t.talep_id
+
+            WHERE t.talep_atanan_personel_id =
+                  :personel_id
+
+            ORDER BY
+                t.talep_olusturulma_tarihi DESC;
+        """)
+
+        sonuc = db.execute(
+            sorgu,
+            {
+                "personel_id":
+                    personel["kullanici_id"],
+            },
+        )
+
+        talepler = [
+            dict(satir._mapping)
+            for satir in sonuc
+        ]
+
+        return {
+            "mesaj": (
+                "Personele atanmış talepler "
+                "başarıyla getirildi."
+            ),
+            "personel": {
+                "kullanici_id":
+                    personel["kullanici_id"],
+                "kullanici_ad_soyad":
+                    personel["kullanici_ad_soyad"],
+                "kullanici_eposta":
+                    personel["kullanici_eposta"],
+            },
+            "toplam_talep": len(talepler),
+            "veri": talepler,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Personel talepleri alınırken "
+                f"hata oluştu: {str(e)}"
+            ),
+        )
+
+    finally:
+        db.close()
 
 # 2. Yönetim Paneli - Dashboard Özeti (GET)
 @app.get("/talepler", tags=["Talepler"])
@@ -184,6 +608,86 @@ def talepleri_getir(
     finally:
         db.close()
 
+@app.get(
+    "/personel/talep/{talep_id}",
+    tags=["Personel Paneli"],
+)
+def personel_talep_detayi(
+    talep_id: str,
+    personel: dict = Depends(
+        personel_token_dogrula
+    ),
+):
+    db = SessionLocal()
+
+    try:
+
+        sorgu = text("""
+            SELECT
+
+                t.talep_id,
+                t.talep_takip_no,
+                t.talep_baslik,
+                t.talep_ham_icerik,
+                t.talep_durum,
+                t.talep_kaynak,
+                t.talep_gonderen_ad_soyad,
+                t.talep_gonderen_eposta,
+                t.talep_olusturulma_tarihi,
+                t.talep_guncellenme_tarihi,
+
+                k.kategori_ad,
+                k.kategori_departman,
+
+                yz.yz_ozet,
+                yz.yz_oncelik_seviyesi,
+                yz.yz_duygu_durumu,
+                yz.yz_guven_skoru,
+                yz.yz_cozum_onerisi,
+                yz.yz_musteri_cevabi
+
+            FROM talepler t
+
+            LEFT JOIN kategoriler k
+                ON k.kategori_id =
+                t.talep_kategori_id
+
+            LEFT JOIN yz_analizleri yz
+                ON yz.yz_talep_id =
+                t.talep_id
+
+            WHERE
+                t.talep_id = :talep_id
+
+            AND
+                t.talep_atanan_personel_id =
+                :personel_id
+        """)
+
+        sonuc = db.execute(
+            sorgu,
+            {
+                "talep_id": talep_id,
+                "personel_id":
+                    personel["kullanici_id"],
+            },
+        ).first()
+
+        if sonuc is None:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Talep bulunamadı.",
+            )
+
+        return dict(
+            sonuc._mapping
+        )
+
+    finally:
+
+        db.close()
+    
 # 3. Filtreli Talepler (GET)
 @app.get("/talepler/filtreli", tags=["Talepler"])
 def filtreli_talepleri_getir(
@@ -584,7 +1088,9 @@ def onay_bekleyenleri_getir(
 )
 def personel_cevabi_gonder(
     onay: PersonelOnayIslemi,
-    admin: dict = Depends(admin_token_dogrula),
+    personel: dict = Depends(
+    personel_token_dogrula
+),
 ):
     """
     Personelin AI taslağını onaylayıp veya düzenleyip
@@ -609,20 +1115,23 @@ def personel_cevabi_gonder(
             )
 
         talep_sorgu = text("""
-            SELECT
-                talep_gonderen_ad_soyad,
-                talep_gonderen_eposta,
-                talep_takip_no,
-                talep_baslik
-            FROM talepler
-            WHERE talep_id = :talep_id;
-        """)
+    SELECT
+        talep_gonderen_ad_soyad,
+        talep_gonderen_eposta,
+        talep_takip_no,
+        talep_baslik
+    FROM talepler
+    WHERE talep_id = :talep_id
+      AND talep_atanan_personel_id = :personel_id;
+""")
 
         talep_sonucu = db.execute(
             talep_sorgu,
             {
-                "talep_id": onay.talep_id,
-            },
+    "talep_id": onay.talep_id,
+    "personel_id":
+        personel["kullanici_id"],
+},
         ).first()
 
         if not talep_sonucu:
@@ -745,7 +1254,7 @@ Akıllı Müşteri Destek Ekibi
             {
                 "talep_id": onay.talep_id,
                 "kullanici_id":
-                    admin["kullanici_id"],
+                    personel["kullanici_id"],
                 "mesaj": log_mesaji,
             },
         )
@@ -1089,7 +1598,10 @@ def tum_kategorileri_getir(
     finally:
         db.close()
 # 19. Dashboard İstatistikleri (GET)
-@app.get("/dashboard/istatistikler", tags=["Dashboard"])
+@app.get(
+    "/dashboard/istatistikler",
+    tags=["Dashboard"],
+)
 def dashboard_istatistikleri(
     _admin: dict = Depends(admin_token_dogrula),
 ):
@@ -1102,27 +1614,33 @@ def dashboard_istatistikleri(
                 COUNT(*) AS toplam_talep_sayisi,
 
                 COUNT(*) FILTER (
-                    WHERE LOWER(TRIM(talep_durum)) IN ('acik', 'açık')
+                    WHERE LOWER(TRIM(talep_durum))
+                        IN ('acik', 'açık')
                 ) AS acik_talep_sayisi,
 
                 COUNT(*) FILTER (
-                    WHERE LOWER(TRIM(talep_durum)) = 'onay_bekliyor'
+                    WHERE LOWER(TRIM(talep_durum)) =
+                        'onay_bekliyor'
                 ) AS onay_bekleyen_talep_sayisi,
 
                 COUNT(*) FILTER (
-                    WHERE LOWER(TRIM(talep_durum)) = 'inceleniyor'
+                    WHERE LOWER(TRIM(talep_durum)) =
+                        'inceleniyor'
                 ) AS incelenen_talep_sayisi,
 
                 COUNT(*) FILTER (
-                    WHERE LOWER(TRIM(talep_durum)) = 'otomatik_yanitlandi'
+                    WHERE LOWER(TRIM(talep_durum)) =
+                        'otomatik_yanitlandi'
                 ) AS otomatik_yanitlanan_talep_sayisi,
 
                 COUNT(*) FILTER (
-                    WHERE LOWER(TRIM(talep_durum)) = 'musteri_yaniti_bekleniyor'
+                    WHERE LOWER(TRIM(talep_durum)) =
+                        'musteri_yaniti_bekleniyor'
                 ) AS musteri_yaniti_bekleyen_talep_sayisi,
 
                 COUNT(*) FILTER (
-                    WHERE LOWER(TRIM(talep_durum)) = 'cozuldu'
+                    WHERE LOWER(TRIM(talep_durum)) =
+                        'cozuldu'
                 ) AS cozulen_talep_sayisi,
 
                 COUNT(*) FILTER (
@@ -1151,7 +1669,9 @@ def dashboard_istatistikleri(
         kritik_sorgu = text("""
             SELECT COUNT(DISTINCT yz_talep_id)
             FROM yz_analizleri
-            WHERE LOWER(TRIM(yz_oncelik_seviyesi)) = 'kritik';
+            WHERE LOWER(
+                TRIM(yz_oncelik_seviyesi)
+            ) = 'kritik';
         """)
 
         kritik_talep_sayisi = (
@@ -1161,42 +1681,113 @@ def dashboard_istatistikleri(
         # 4. Kategorilere göre talep dağılımı
         kategori_sorgu = text("""
             SELECT
-                COALESCE(k.kategori_ad, 'Kategorisiz') AS kategori,
+                COALESCE(
+                    k.kategori_ad,
+                    'Kategorisiz'
+                ) AS kategori,
+
                 COUNT(*) AS talep_sayisi
+
             FROM talepler t
+
             LEFT JOIN kategoriler k
-                ON t.talep_kategori_id = k.kategori_id
-            GROUP BY k.kategori_ad
-            ORDER BY talep_sayisi DESC;
+                ON t.talep_kategori_id =
+                   k.kategori_id
+
+            GROUP BY
+                k.kategori_ad
+
+            ORDER BY
+                talep_sayisi DESC;
         """)
 
-        kategori_sonucu = db.execute(kategori_sorgu)
+        kategori_sonucu = db.execute(
+            kategori_sorgu
+        )
 
         kategori_dagilimi = [
             {
                 "kategori": satir.kategori,
-                "talep_sayisi": satir.talep_sayisi
+                "talep_sayisi":
+                    satir.talep_sayisi,
             }
             for satir in kategori_sonucu
         ]
 
-        # 5. Ortalama ilk yanıt bekleme süresi
+        # 5. Personellere göre talep dağılımı
+        personel_sorgu = text("""
+            SELECT
+                k.kullanici_id
+                    AS personel_id,
+
+                k.kullanici_ad_soyad
+                    AS personel_adi,
+
+                COUNT(t.talep_id)
+                    AS talep_sayisi
+
+            FROM kullanicilar k
+
+            LEFT JOIN talepler t
+                ON t.talep_atanan_personel_id =
+                   k.kullanici_id
+
+            WHERE LOWER(
+                TRIM(k.kullanici_rol)
+            ) = 'personel'
+
+            GROUP BY
+                k.kullanici_id,
+                k.kullanici_ad_soyad
+
+            ORDER BY
+                talep_sayisi DESC,
+                k.kullanici_ad_soyad ASC;
+        """)
+
+        personel_sonucu = db.execute(
+            personel_sorgu
+        )
+
+        personel_dagilimi = [
+            {
+                "personel_id":
+                    str(satir.personel_id),
+
+                "personel_adi":
+                    satir.personel_adi,
+
+                "talep_sayisi":
+                    satir.talep_sayisi,
+            }
+            for satir in personel_sonucu
+        ]
+
+        # 6. Ortalama ilk yanıt bekleme süresi
         ortalama_sure_sorgu = text("""
             SELECT
                 AVG(
                     ilk_yorum.ilk_yorum_tarihi
                     - t.talep_olusturulma_tarihi
                 ) AS ortalama_yanit_bekleme_suresi
+
             FROM talepler t
+
             JOIN (
                 SELECT
                     yorum_talep_id,
-                    MIN(yorum_olusturulma_tarihi)
-                        AS ilk_yorum_tarihi
+
+                    MIN(
+                        yorum_olusturulma_tarihi
+                    ) AS ilk_yorum_tarihi
+
                 FROM yorumlar
-                GROUP BY yorum_talep_id
+
+                GROUP BY
+                    yorum_talep_id
             ) ilk_yorum
-                ON ilk_yorum.yorum_talep_id = t.talep_id;
+                ON ilk_yorum.yorum_talep_id =
+                   t.talep_id;
         """)
 
         ortalama_sure = db.execute(
@@ -1232,28 +1823,36 @@ def dashboard_istatistikleri(
             ),
             "veri": {
                 "toplam_talep_sayisi":
-                    durum_sayilari_sonucu.toplam_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .toplam_talep_sayisi,
 
                 "acik_talep_sayisi":
-                    durum_sayilari_sonucu.acik_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .acik_talep_sayisi,
 
                 "onay_bekleyen_talep_sayisi":
-                    durum_sayilari_sonucu.onay_bekleyen_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .onay_bekleyen_talep_sayisi,
 
                 "incelenen_talep_sayisi":
-                    durum_sayilari_sonucu.incelenen_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .incelenen_talep_sayisi,
 
                 "otomatik_yanitlanan_talep_sayisi":
-                    durum_sayilari_sonucu.otomatik_yanitlanan_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .otomatik_yanitlanan_talep_sayisi,
 
                 "musteri_yaniti_bekleyen_talep_sayisi":
-                    durum_sayilari_sonucu.musteri_yaniti_bekleyen_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .musteri_yaniti_bekleyen_talep_sayisi,
 
                 "cozulen_talep_sayisi":
-                    durum_sayilari_sonucu.cozulen_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .cozulen_talep_sayisi,
 
                 "son_24_saat_talep_sayisi":
-                    durum_sayilari_sonucu.son_24_saat_talep_sayisi,
+                    durum_sayilari_sonucu
+                    .son_24_saat_talep_sayisi,
 
                 "kritik_talep_sayisi":
                     kritik_talep_sayisi,
@@ -1265,8 +1864,11 @@ def dashboard_istatistikleri(
                     ortalama_yanit_bekleme_suresi,
 
                 "kategori_dagilimi":
-                    kategori_dagilimi
-            }
+                    kategori_dagilimi,
+
+                "personel_dagilimi":
+                    personel_dagilimi,
+            },
         }
 
     except Exception as e:
@@ -1275,7 +1877,7 @@ def dashboard_istatistikleri(
             detail=(
                 "Dashboard istatistikleri alınırken "
                 f"hata oluştu: {str(e)}"
-            )
+            ),
         )
 
     finally:

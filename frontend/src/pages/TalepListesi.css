@@ -1015,3 +1015,51 @@
     display: none;
   }
 }
+/* ========================= */
+/* Talep Devretme Bölümü */
+/* ========================= */
+
+.talep-devretme-bolumu {
+  margin-top: 24px;
+}
+
+.talep-devretme-select {
+  width: 100%;
+  margin-top: 10px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+
+  border: 1px solid #e7dff8;
+  border-radius: 14px;
+
+  background: #ffffff;
+  color: #453b58;
+
+  font-size: 14px;
+  font-family: inherit;
+
+  outline: none;
+
+  transition: 0.25s;
+}
+
+.talep-devretme-select:focus {
+  border-color: #b794f4;
+
+  box-shadow:
+    0 0 0 4px
+    rgba(183, 148, 244, 0.15);
+}
+
+.talep-devretme-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.talep-devretme-bolumu .personel-onay-alt-satir {
+  margin-top: 20px;
+}
+
+.talep-devretme-bolumu small {
+  color: #7b7288;
+}

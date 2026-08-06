@@ -34,7 +34,7 @@
   position: relative;
   z-index: 2;
   width: 100%;
-  max-width: 1050px;
+  max-width: 1380px;
 }
 
 /* Başlık alanı */
@@ -100,10 +100,9 @@
 
 .ana-sayfa-kartlar {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 28px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
 }
-
 .secim-karti {
   position: relative;
   display: flex;
@@ -149,6 +148,9 @@
 
 .admin-karti::before {
   background: #c4b5fd;
+}
+.personel-karti::before {
+  background: #93c5fd;
 }
 
 .secim-karti:hover {
@@ -200,6 +202,13 @@
     135deg,
     #ede9fe,
     #ddd6fe
+  );
+}
+.personel-ikonu {
+  background: linear-gradient(
+    135deg,
+    #dbeafe,
+    #bfdbfe
   );
 }
 
@@ -322,6 +331,13 @@
     #6366f1
   );
 }
+.personel-butonu {
+  background: linear-gradient(
+    135deg,
+    #3b82f6,
+    #2563eb
+  );
+}
 
 /* Alt yazı */
 
@@ -404,8 +420,25 @@
   }
 }
 
-/* Telefon görünümü */
+/* Tablet görünümü */
+@media (max-width: 1100px) {
+  .ana-sayfa-icerik {
+    max-width: 900px;
+  }
 
+  .ana-sayfa-kartlar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .personel-karti {
+    grid-column: 1 / -1;
+    max-width: 438px;
+    width: 100%;
+    justify-self: center;
+  }
+}
+
+/* Telefon görünümü */
 @media (max-width: 760px) {
   .ana-sayfa {
     align-items: flex-start;
@@ -414,6 +447,12 @@
 
   .ana-sayfa-kartlar {
     grid-template-columns: 1fr;
+  }
+
+  .personel-karti {
+    grid-column: auto;
+    max-width: none;
+    width: 100%;
   }
 
   .secim-karti {

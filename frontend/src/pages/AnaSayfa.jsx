@@ -6,6 +6,11 @@ function AnaSayfa() {
     sessionStorage.removeItem("admin_token");
   }
 
+  function personelGirisineGit() {
+    sessionStorage.removeItem("personel_token");
+    sessionStorage.removeItem("personel_bilgisi");
+  }
+
   return (
     <div className="ana-sayfa">
       {/* Arka plandaki dekoratif şekiller */}
@@ -25,8 +30,9 @@ function AnaSayfa() {
           </h1>
 
           <p>
-            Destek talebinizi kolayca oluşturun veya
-            yetkiliyseniz yönetici paneline giriş yapın.
+            Destek talebinizi oluşturun, yönetici
+            paneline erişin veya personel hesabınızla
+            size atanmış talepleri yönetin.
           </p>
         </header>
 
@@ -94,6 +100,41 @@ function AnaSayfa() {
               className="secim-butonu admin-butonu"
             >
               Yönetici Paneline Geç
+              <span>→</span>
+            </Link>
+          </article>
+
+          <article className="secim-karti personel-karti">
+            <div className="kart-ust-alan">
+              <div className="secim-ikonu personel-ikonu">
+                👨‍💻
+              </div>
+
+              <span className="kart-etiketi">
+                Personel
+              </span>
+            </div>
+
+            <h2>Personel Paneli</h2>
+
+            <p>
+              Size otomatik olarak atanmış destek
+              taleplerini inceleyin ve müşterilere
+              yanıt verin.
+            </p>
+
+            <ul className="kart-ozellikleri">
+              <li>✓ Atanan talepler</li>
+              <li>✓ Müşteriye yanıt gönderme</li>
+              <li>✓ Talep durumu yönetimi</li>
+            </ul>
+
+            <Link
+              to="/personel-giris"
+              onClick={personelGirisineGit}
+              className="secim-butonu personel-butonu"
+            >
+              Personel Paneline Geç
               <span>→</span>
             </Link>
           </article>
