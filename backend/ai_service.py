@@ -22,59 +22,99 @@ from services import (
 )
 
 RISKLI_KATEGORILER: List[int] = [1, 3, 4, 7, 8]
-def en_az_yuku_olan_personeli_bul(db: Session):
+
+
+def en_az_yuku_olan_personeli_bul(
+    db: Session,
+    departman: str,
+):
     sorgu = text("""
         SELECT
             k.kullanici_id
         FROM kullanicilar k
+
         LEFT JOIN talepler t
             ON t.talep_atanan_personel_id =
                k.kullanici_id
            AND LOWER(TRIM(t.talep_durum))
                NOT IN (
-                    'cozuldu',
-                    'kapali'
+                   'cozuldu',
+                   'kapali'
                )
-              WHERE LOWER(TRIM(k.kullanici_rol)) = 'personel'
-  AND LOWER(TRIM(k.kullanici_ad_soyad))
-      <> 'sistem personeli'
+
+        WHERE LOWER(TRIM(k.kullanici_rol)) =
+              'personel'
+
+          AND LOWER(
+              TRIM(k.kullanici_departman)
+          ) = LOWER(
+              TRIM(:departman)
+          )
+
+          AND LOWER(
+              TRIM(k.kullanici_ad_soyad)
+          ) <> 'sistem personeli'
+
         GROUP BY
             k.kullanici_id,
             k.kullanici_olusturulma_tarihi
+
         ORDER BY
             COUNT(t.talep_id) ASC,
             k.kullanici_olusturulma_tarihi ASC
+
         LIMIT 1;
     """)
 
-    return db.execute(sorgu).scalar()
+    personel_id = db.execute(
+        sorgu,
+        {
+            "departman": departman,
+        },
+    ).scalar()
 
-def en_az_yuku_olan_personeli_bul(
-    db,
-) -> str | None:
-    sorgu = text("""
+    if personel_id:
+        return personel_id
+
+    genel_destek_sorgu = text("""
         SELECT
             k.kullanici_id
         FROM kullanicilar k
+
         LEFT JOIN talepler t
             ON t.talep_atanan_personel_id =
-                k.kullanici_id
-           AND LOWER(TRIM(t.talep_durum)) NOT IN (
-                'cozuldu',
-                'kapali'
-           )
+               k.kullanici_id
+           AND LOWER(TRIM(t.talep_durum))
+               NOT IN (
+                   'cozuldu',
+                   'kapali'
+               )
+
         WHERE LOWER(TRIM(k.kullanici_rol)) =
-            'personel'
+              'personel'
+
+          AND LOWER(
+              TRIM(k.kullanici_departman)
+          ) = 'genel destek'
+
+          AND LOWER(
+              TRIM(k.kullanici_ad_soyad)
+          ) <> 'sistem personeli'
+
         GROUP BY
             k.kullanici_id,
             k.kullanici_olusturulma_tarihi
+
         ORDER BY
             COUNT(t.talep_id) ASC,
             k.kullanici_olusturulma_tarihi ASC
+
         LIMIT 1;
     """)
 
-    return db.execute(sorgu).scalar()
+    return db.execute(
+        genel_destek_sorgu
+    ).scalar()
 # Tekrar eden talep kontrolü
 def tekrar_eden_talep_kontrol(
     db,
@@ -140,10 +180,32 @@ def ai_sonucu_isle(
         onerilen_cevap = analiz_sonucu.onerilen_cevap
 
         # 3. Kategori adına göre ID'yi bul
-        kategori_id = kategori_id_bul(db, kategori_adi)
+        kategori_id = kategori_id_bul(
+            db,
+            kategori_adi,
+        )
+
+        # Kategorinin bağlı olduğu departmanı bul
+        departman_sorgu = text("""
+            SELECT kategori_departman
+            FROM kategoriler
+            WHERE kategori_id = :kategori_id;
+        """)
+
+        kategori_departman = db.execute(
+            departman_sorgu,
+            {
+                "kategori_id": kategori_id,
+            },
+        ).scalar()
+
+        if not kategori_departman:
+            kategori_departman = "Genel Destek"
 
         # 4. Riskli kategori kontrolü ve etiketleme
-        riskli_mi = kategori_id in RISKLI_KATEGORILER
+        riskli_mi = (
+            kategori_id in RISKLI_KATEGORILER
+        )
         
 
         # --- HİBRİT YÖNLENDİRME MANTIĞI ---
@@ -165,14 +227,32 @@ def ai_sonucu_isle(
             yeni_durum = "otomatik_yanitlandi"
 
         if yeni_durum in (
-    "inceleniyor",
-    "onay_bekliyor",
-):
-              atanan_personel_id = (
-        en_az_yuku_olan_personeli_bul(db)
-    )
+            "inceleniyor",
+            "onay_bekliyor",
+        ):
+            atanan_personel_id = (
+                en_az_yuku_olan_personeli_bul(
+                    db,
+                    kategori_departman,
+                )
+            )
         else:
-          atanan_personel_id = None 
+            atanan_personel_id = None
+
+        print(
+            "AI kategorisi:",
+            kategori_adi,
+        )
+
+        print(
+            "Kategori departmanı:",
+            kategori_departman,
+        )
+
+        print(
+            "Otomatik atanan personel ID:",
+            atanan_personel_id,
+        )
           
         print(">>> OTOMATİK YANIT BLOĞUNA GİRİLDİ <<<")
         if yeni_durum == "otomatik_yanitlandi":
