@@ -147,9 +147,9 @@ def tekrar_eden_talep_kontrol(
 
     return sonuc > 0
 
-
 def benzer_talepleri_bul(
     db,
+    talep_id: str,
     baslik: str,
     icerik: str,
 ):
@@ -174,24 +174,28 @@ def benzer_talepleri_bul(
 
         # 2. En benzer 5 geçmiş talebi getir
         rag_sorgu = text("""
-            SELECT *
-            FROM fn_rag_vektor_arama(
-                CAST(:aranan_vektor AS vector),
-                5
-            );
-        """)
+    SELECT *
+    FROM fn_rag_vektor_arama(
+        CAST(:aranan_vektor AS vector),
+        5,
+        CAST(:haric_talep_id AS uuid)
+    );
+""")
 
         rag_sonucu = db.execute(
-            rag_sorgu,
-            {
-                "aranan_vektor": vektor_str,
-            },
-        )
+    rag_sorgu,
+    {
+        "aranan_vektor": vektor_str,
+        "haric_talep_id": talep_id,
+    },
+)
 
         ham_talepler = [
             dict(satir._mapping)
             for satir in rag_sonucu
         ]
+       
+
 
         # 3. AnalizIstegi modelinin istediği
         # baslik / icerik / cozum formatına çevir
@@ -206,8 +210,7 @@ def benzer_talepleri_bul(
                 SELECT
                     COALESCE(
                         yz.yz_musteri_cevabi,
-                        yz.yz_cozum_onerisi,
-                        'Geçmiş çözüm bilgisi bulunamadı.'
+                        yz.yz_cozum_onerisi
                     ) AS cozum
                 FROM talepler t
                 LEFT JOIN yz_analizleri yz
@@ -223,6 +226,11 @@ def benzer_talepleri_bul(
                 },
             ).scalar()
 
+            # Gerçek çözümü olmayan geçmiş kayıtları
+            # AI bağlamına ekleme
+            if not cozum:
+                continue
+
             yeni_talep = {
                 "baslik": (
                     talep.get(
@@ -236,18 +244,14 @@ def benzer_talepleri_bul(
                     )
                     or ""
                 ),
-                "cozum": (
-                    cozum
-                    or "Geçmiş çözüm bilgisi bulunamadı."
-                ),
+                "cozum": cozum,
             }
 
             benzer_talepler.append(
                 yeni_talep
             )
-
+           
         return benzer_talepler
-
     except Exception as rag_hatasi:
         print(
             "RAG benzer talep araması "
@@ -271,23 +275,12 @@ def ai_sonucu_isle(
 
     try:
         benzer_talepler = benzer_talepleri_bul(
-            db,
-            baslik,
-            icerik,
-        )
-
-        print(
-            "AI analizine gönderilen "
-            "benzer talep sayısı:",
-            len(benzer_talepler),
-        )
-
-        for benzer_talep in benzer_talepler:
-            print(
-                "RAG ->",
-                benzer_talep,
-            )
-
+             db,
+             talep_id,
+             baslik,
+             icerik,
+          )
+       
         istek_paketi = AnalizIstegi(
             talep_id=talep_id,
             baslik=baslik,
