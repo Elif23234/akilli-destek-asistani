@@ -553,3 +553,70 @@ export async function adminTalebiDevret({
 
   return sonuc;
 }
+export async function getPersonelProfili() {
+  const response = await fetch(
+    `${API_URL}/personel/profil`,
+    {
+      headers: {
+        ...getPersonelAuthHeaders(),
+      },
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Personel profili alınamadı."
+    );
+  }
+
+  return sonuc;
+}
+
+
+export async function personelSifreDegistir({
+  mevcutSifre,
+  yeniSifre,
+}) {
+  const response = await fetch(
+    `${API_URL}/personel/sifre-degistir`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type":
+          "application/json",
+
+        ...getPersonelAuthHeaders(),
+      },
+      body: JSON.stringify({
+        mevcut_sifre: mevcutSifre,
+        yeni_sifre: yeniSifre,
+      }),
+    }
+  );
+
+  let sonuc = {};
+
+  try {
+    sonuc = await response.json();
+  } catch {
+    sonuc = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      sonuc.detail ||
+        "Şifre değiştirilemedi."
+    );
+  }
+
+  return sonuc;
+}

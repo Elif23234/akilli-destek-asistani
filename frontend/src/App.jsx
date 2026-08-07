@@ -5,27 +5,47 @@ import {
 
 import "./styles/Layout.css";
 
-import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedRoute
+  from "./components/ProtectedRoute";
+
 import PersonelProtectedRoute
   from "./components/PersonelProtectedRoute";
 
-import AdminLayout from "./layouts/AdminLayout";
+import AdminLayout
+  from "./layouts/AdminLayout";
 
-import AnaSayfa from "./pages/AnaSayfa";
-import AdminGiris from "./pages/AdminGiris";
-import PersonelGiris from "./pages/PersonelGiris";
+import AnaSayfa
+  from "./pages/AnaSayfa";
 
-import Dashboard from "./pages/Dashboard";
-import MusteriOnayi from "./pages/MusteriOnayi";
-import SikayetFormu from "./pages/SikayetFormu";
-import TalepDetay from "./pages/TalepDetay";
-import TalepListesi from "./pages/TalepListesi";
+import AdminGiris
+  from "./pages/AdminGiris";
+
+import PersonelGiris
+  from "./pages/PersonelGiris";
+
+import Dashboard
+  from "./pages/Dashboard";
+
+import MusteriOnayi
+  from "./pages/MusteriOnayi";
+
+import SikayetFormu
+  from "./pages/SikayetFormu";
+
+import TalepDetay
+  from "./pages/TalepDetay";
+
+import TalepListesi
+  from "./pages/TalepListesi";
 
 import PersonelPaneli
   from "./pages/PersonelPaneli";
 
 import PersonelTalepDetay
   from "./pages/PersonelTalepDetay";
+
+import PersonelProfil
+  from "./pages/PersonelProfil";
 
 function App() {
   return (
@@ -85,7 +105,9 @@ function App() {
       </Route>
 
       {/* Korunan personel sayfaları */}
-      <Route element={<PersonelProtectedRoute />}>
+      <Route
+        element={<PersonelProtectedRoute />}
+      >
         <Route
           path="/personel-paneli"
           element={<PersonelPaneli />}
@@ -94,6 +116,11 @@ function App() {
         <Route
           path="/personel-talep/:talepId"
           element={<PersonelTalepDetay />}
+        />
+
+        <Route
+          path="/personel-profil"
+          element={<PersonelProfil />}
         />
       </Route>
     </Routes>

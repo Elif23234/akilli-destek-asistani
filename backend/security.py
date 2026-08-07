@@ -314,3 +314,20 @@ def personel_token_dogrula(
         "rol": rol,
         "kullanici_id": kullanici_id,
     }
+def personel_sifresi_dogrula(
+    sifre: str,
+    kayitli_hash: str,
+) -> bool:
+    try:
+        return password_hash.verify(
+            sifre,
+            kayitli_hash,
+        )
+    except Exception:
+        return False
+
+
+def personel_sifresi_hashle(
+    sifre: str,
+) -> str:
+    return password_hash.hash(sifre)

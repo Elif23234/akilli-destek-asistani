@@ -200,11 +200,9 @@ function istatistikleriGoster() {
 function profiliGoster() {
   setAktifMenu("profil");
 
-  document
-    .querySelector(".personel-sidebar-alt")
-    ?.scrollIntoView({
-      behavior: "smooth",
-    });
+  navigate(
+    "/personel-profil"
+  );
 }
   function durumMetniOlustur(durum) {
     const durumlar = {

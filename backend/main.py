@@ -18,6 +18,8 @@ from security import (
     admin_token_olustur,
     admin_token_dogrula,
     personel_bilgilerini_dogrula,
+    personel_sifresi_dogrula,
+    personel_sifresi_hashle,
     personel_token_olustur,
     personel_token_dogrula,
 )
@@ -83,6 +85,9 @@ class TalepYonlendirme(BaseModel):
     talep_id: str
     yeni_kategori_id: int
     mesaj: str = "Talep yanlış departmana geldiği için ilgili birime yönlendirildi."
+class PersonelSifreDegistirme(BaseModel):
+    mevcut_sifre: str
+    yeni_sifre: str
 
 # --- API UÇ NOKTALARI ---
 
@@ -444,6 +449,245 @@ def personel_token_kontrol(
         "rol":
             personel["rol"],
     }
+
+@app.get(
+    "/personel/profil",
+    tags=["Personel"],
+)
+def personel_profili_getir(
+    personel: dict = Depends(
+        personel_token_dogrula
+    ),
+):
+    db = SessionLocal()
+
+    try:
+        profil_sorgu = text("""
+            SELECT
+                k.kullanici_id,
+                k.kullanici_ad_soyad,
+                k.kullanici_eposta,
+                k.kullanici_rol,
+                k.kullanici_departman,
+                k.kullanici_olusturulma_tarihi,
+
+                COUNT(t.talep_id)
+                    AS toplam_atanan_talep,
+
+                COUNT(t.talep_id) FILTER (
+                    WHERE LOWER(
+                        TRIM(t.talep_durum)
+                    ) = 'cozuldu'
+                ) AS toplam_cozulen_talep,
+
+                COUNT(t.talep_id) FILTER (
+                    WHERE LOWER(
+                        TRIM(t.talep_durum)
+                    ) <> 'cozuldu'
+                ) AS aktif_talep_sayisi,
+
+                COUNT(t.talep_id) FILTER (
+                    WHERE LOWER(
+                        TRIM(t.talep_durum)
+                    ) = 'cozuldu'
+                      AND DATE(
+                          t.talep_guncellenme_tarihi
+                      ) = CURRENT_DATE
+                ) AS bugun_cozulen_talep
+
+            FROM kullanicilar k
+
+            LEFT JOIN talepler t
+                ON t.talep_atanan_personel_id =
+                   k.kullanici_id
+
+            WHERE k.kullanici_id =
+                  :personel_id
+
+            GROUP BY
+                k.kullanici_id,
+                k.kullanici_ad_soyad,
+                k.kullanici_eposta,
+                k.kullanici_rol,
+                k.kullanici_departman,
+                k.kullanici_olusturulma_tarihi;
+        """)
+
+        profil_sonucu = db.execute(
+            profil_sorgu,
+            {
+                "personel_id":
+                    personel["kullanici_id"],
+            },
+        ).first()
+
+        if not profil_sonucu:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Personel profili "
+                    "bulunamadı."
+                ),
+            )
+
+        return {
+            "mesaj": (
+                "Personel profili "
+                "başarıyla getirildi."
+            ),
+            "veri": dict(
+                profil_sonucu._mapping
+            ),
+        }
+
+    finally:
+        db.close()
+
+@app.put(
+    "/personel/sifre-degistir",
+    tags=["Personel"],
+)
+def personel_sifresini_degistir(
+    veri: PersonelSifreDegistirme,
+    personel: dict = Depends(
+        personel_token_dogrula
+    ),
+):
+    db = SessionLocal()
+
+    try:
+        mevcut_sifre = (
+            veri.mevcut_sifre.strip()
+        )
+
+        yeni_sifre = (
+            veri.yeni_sifre.strip()
+        )
+
+        if not mevcut_sifre:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Mevcut şifre boş "
+                    "bırakılamaz."
+                ),
+            )
+
+        if len(yeni_sifre) < 8:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Yeni şifre en az "
+                    "8 karakter olmalıdır."
+                ),
+            )
+
+        if mevcut_sifre == yeni_sifre:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Yeni şifre mevcut "
+                    "şifreyle aynı olamaz."
+                ),
+            )
+
+        personel_sorgu = text("""
+            SELECT
+                kullanici_sifre_hash
+            FROM kullanicilar
+            WHERE kullanici_id =
+                  :personel_id
+              AND LOWER(
+                  TRIM(kullanici_rol)
+              ) = 'personel';
+        """)
+
+        personel_sonucu = db.execute(
+            personel_sorgu,
+            {
+                "personel_id":
+                    personel["kullanici_id"],
+            },
+        ).first()
+
+        if not personel_sonucu:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Personel hesabı "
+                    "bulunamadı."
+                ),
+            )
+
+        mevcut_hash = (
+            personel_sonucu
+            .kullanici_sifre_hash
+        )
+
+        sifre_dogru = (
+            personel_sifresi_dogrula(
+                mevcut_sifre,
+                mevcut_hash,
+            )
+        )
+
+        if not sifre_dogru:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Mevcut şifre hatalı."
+                ),
+            )
+
+        yeni_hash = (
+            personel_sifresi_hashle(
+                yeni_sifre
+            )
+        )
+
+        guncelleme_sorgu = text("""
+            UPDATE kullanicilar
+            SET kullanici_sifre_hash =
+                :yeni_hash
+            WHERE kullanici_id =
+                  :personel_id;
+        """)
+
+        db.execute(
+            guncelleme_sorgu,
+            {
+                "yeni_hash": yeni_hash,
+                "personel_id":
+                    personel["kullanici_id"],
+            },
+        )
+
+        db.commit()
+
+        return {
+            "mesaj": (
+                "Şifreniz başarıyla "
+                "güncellendi."
+            ),
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as e:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Şifre değiştirilirken "
+                f"hata oluştu: {str(e)}"
+            ),
+        )
+
+    finally:
+        db.close()
 
 @app.get(
     "/personel/taleplerim",
