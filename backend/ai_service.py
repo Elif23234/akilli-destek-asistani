@@ -13,6 +13,7 @@ if str(PROJE_KOK) not in sys.path:
 
 from ai_motoru.models import AnalizIstegi
 from ai_motoru.pipeline import talebi_analiz_et
+from ai_motoru.embedding import embedding_olustur
 from database import SessionLocal
 from eposta_service import eposta_gonder
 from services import (
@@ -147,39 +148,173 @@ def tekrar_eden_talep_kontrol(
     return sonuc > 0
 
 
+def benzer_talepleri_bul(
+    db,
+    baslik: str,
+    icerik: str,
+):
+    """
+    Yeni talebe benzeyen geçmiş talepleri bulur
+    ve AI modelinin beklediği formata dönüştürür.
+    """
+    arama_metni = f"{baslik}\n{icerik}".strip()
+
+    if not arama_metni:
+        return []
+
+    try:
+        # 1. Yeni talebin embedding'ini oluştur
+        aranan_vektor_listesi = embedding_olustur(
+            arama_metni
+        )
+
+        vektor_str = str(
+            aranan_vektor_listesi
+        )
+
+        # 2. En benzer 5 geçmiş talebi getir
+        rag_sorgu = text("""
+            SELECT *
+            FROM fn_rag_vektor_arama(
+                CAST(:aranan_vektor AS vector),
+                5
+            );
+        """)
+
+        rag_sonucu = db.execute(
+            rag_sorgu,
+            {
+                "aranan_vektor": vektor_str,
+            },
+        )
+
+        ham_talepler = [
+            dict(satir._mapping)
+            for satir in rag_sonucu
+        ]
+
+        # 3. AnalizIstegi modelinin istediği
+        # baslik / icerik / cozum formatına çevir
+        benzer_talepler = []
+
+        for talep in ham_talepler:
+            takip_no = talep.get(
+                "talep_takip_no"
+            )
+
+            cozum_sorgu = text("""
+                SELECT
+                    COALESCE(
+                        yz.yz_musteri_cevabi,
+                        yz.yz_cozum_onerisi,
+                        'Geçmiş çözüm bilgisi bulunamadı.'
+                    ) AS cozum
+                FROM talepler t
+                LEFT JOIN yz_analizleri yz
+                    ON yz.yz_talep_id = t.talep_id
+                WHERE t.talep_takip_no = :takip_no
+                LIMIT 1;
+            """)
+
+            cozum = db.execute(
+                cozum_sorgu,
+                {
+                    "takip_no": takip_no,
+                },
+            ).scalar()
+
+            yeni_talep = {
+                "baslik": (
+                    talep.get(
+                        "talep_baslik"
+                    )
+                    or ""
+                ),
+                "icerik": (
+                    talep.get(
+                        "talep_icerik"
+                    )
+                    or ""
+                ),
+                "cozum": (
+                    cozum
+                    or "Geçmiş çözüm bilgisi bulunamadı."
+                ),
+            }
+
+            benzer_talepler.append(
+                yeni_talep
+            )
+
+        return benzer_talepler
+
+    except Exception as rag_hatasi:
+        print(
+            "RAG benzer talep araması "
+            "başarısız oldu:",
+            rag_hatasi,
+        )
+
+        return []
+
 def ai_sonucu_isle(
     talep_id: str,
     baslik: str,
     icerik: str,
 ):
     """
-    Yapay zeka motorunu arka planda bağımsız bir veritabanı oturumuyla çalıştırır
+    Yapay zeka motorunu arka planda bağımsız bir
+    veritabanı oturumuyla çalıştırır
     ve otomasyon kurallarını tetikler.
     """
     db = SessionLocal()
 
     try:
-        # 1. Gelen verileri pipeline'ın beklediği Pydantic modeline otomatik paketle
+        benzer_talepler = benzer_talepleri_bul(
+            db,
+            baslik,
+            icerik,
+        )
+
+        print(
+            "AI analizine gönderilen "
+            "benzer talep sayısı:",
+            len(benzer_talepler),
+        )
+
+        for benzer_talep in benzer_talepler:
+            print(
+                "RAG ->",
+                benzer_talep,
+            )
+
         istek_paketi = AnalizIstegi(
             talep_id=talep_id,
             baslik=baslik,
             icerik=icerik,
-            benzer_talepler=[],
+            benzer_talepler=benzer_talepler,
         )
 
-        # 2. Pipeline üzerinden otomatik analizi gerçekleştir
-        analiz_sonucu = talebi_analiz_et(istek_paketi)
+        analiz_sonucu = talebi_analiz_et(
+            istek_paketi
+        )
 
         kategori_adi = analiz_sonucu.kategori_adi
         oncelik_skoru = analiz_sonucu.oncelik_skoru
-        oncelik_seviyesi = analiz_sonucu.oncelik_seviyesi
+        oncelik_seviyesi = (
+            analiz_sonucu.oncelik_seviyesi
+        )
         duygu_durumu = analiz_sonucu.duygu_durumu
-        oncelik_gerekcesi = analiz_sonucu.oncelik_gerekcesi
+        oncelik_gerekcesi = (
+            analiz_sonucu.oncelik_gerekcesi
+        )
         guven_skoru = analiz_sonucu.guven_skoru
         cozum_onerisi = analiz_sonucu.cozum_onerisi
         onerilen_cevap = analiz_sonucu.onerilen_cevap
 
-        # 3. Kategori adına göre ID'yi bul
+        # Buradan sonra mevcut kodun aynen devam edecek.
+
+        # 4. Kategori adına göre ID'yi bul
         kategori_id = kategori_id_bul(
             db,
             kategori_adi,
