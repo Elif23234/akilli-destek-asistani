@@ -69,7 +69,7 @@ Geçmiş benzer talepler:
 
     try:
         cevap = client.models.generate_content(
-            model="gemini-3.6-flash",
+            model="gemini-2.5-flash",
             contents=kullanici_promptu,
             config={
                 "response_mime_type": "application/json",
