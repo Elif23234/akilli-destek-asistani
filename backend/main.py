@@ -25,18 +25,17 @@ from security import (
 )
 from eposta_service import eposta_gonder
 load_dotenv()
+from routers.auth import router as auth_router
+from routers.admin import router as admin_router
 
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_EMAIL = os.getenv("SMTP_EMAIL")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
-
-
-
-
 app = FastAPI(title="Akıllı Destek Asistanı API")
-
+app.include_router(auth_router)
+app.include_router(admin_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"], 
@@ -52,12 +51,7 @@ class YeniTalep(BaseModel):
     baslik: str
     icerik: str
     kaynak: str = "web"
-class AdminGiris(BaseModel):
-    kullanici_adi: str
-    sifre: str
-class PersonelGiris(BaseModel):
-    eposta: str
-    sifre: str
+
 class YeniYorum(BaseModel):
     talep_id: str
     mesaj: str
@@ -95,130 +89,7 @@ class PersonelSifreDegistirme(BaseModel):
 @app.get("/")
 def read_root():
     return {"mesaj": "Akıllı Destek Asistanı backend sistemi başarıyla çalışıyor!"}
-@app.post("/admin/giris", tags=["Admin"])
-def admin_girisi(giris: AdminGiris):
-    giris_basarili = admin_bilgilerini_dogrula(
-        giris.kullanici_adi,
-        giris.sifre,
-    )
 
-    if not giris_basarili:
-        raise HTTPException(
-            status_code=401,
-            detail="Kullanıcı adı veya şifre hatalı.",
-        )
-
-    token = admin_token_olustur(
-        giris.kullanici_adi
-    )
-
-    return {
-        "mesaj": "Yönetici girişi başarılı.",
-        "access_token": token,
-        "token_type": "bearer",
-    }
-
-
-@app.post(
-    "/personel/giris",
-    tags=["Personel"],
-)
-def personel_girisi(
-    giris: PersonelGiris,
-):
-    personel = personel_bilgilerini_dogrula(
-        giris.eposta,
-        giris.sifre,
-    )
-
-    if not personel:
-        raise HTTPException(
-            status_code=401,
-            detail="Personel e-posta adresi veya şifre hatalı.",
-        )
-
-    token = personel_token_olustur(
-        personel
-    )
-
-    return {
-        "mesaj": "Personel girişi başarılı.",
-        "access_token": token,
-        "token_type": "bearer",
-        "personel": {
-            "kullanici_id":
-                personel["kullanici_id"],
-            "kullanici_eposta":
-                personel["kullanici_eposta"],
-            "kullanici_ad_soyad":
-                personel["kullanici_ad_soyad"],
-            "rol":
-                personel["rol"],
-        },
-    }
-
-
-
-@app.get("/admin/token-kontrol", tags=["Admin"])
-def admin_token_kontrol(
-    admin: dict = Depends(admin_token_dogrula),
-):
-    return {
-        "mesaj": "Yönetici tokenı geçerli.",
-        "kullanici_adi": admin["kullanici_adi"],
-        "kullanici_id": admin["kullanici_id"],
-        "rol": admin["rol"],
-    }
-
-@app.get(
-    "/admin/personeller",
-    tags=["Admin"],
-)
-def admin_personelleri_getir(
-    _admin: dict = Depends(
-        admin_token_dogrula
-    ),
-):
-    db = SessionLocal()
-
-    try:
-        sorgu = text("""
-            SELECT
-                kullanici_id,
-                kullanici_ad_soyad,
-                kullanici_eposta,
-                kullanici_rol
-            FROM kullanicilar
-            WHERE LOWER(
-                TRIM(kullanici_rol)
-            ) = 'personel'
-            ORDER BY
-                kullanici_ad_soyad ASC;
-        """)
-
-        sonuc = db.execute(sorgu)
-
-        personeller = [
-            dict(satir._mapping)
-            for satir in sonuc
-        ]
-
-        return {
-            "mesaj": "Personeller başarıyla getirildi.",
-            "veri": personeller,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Personeller alınırken "
-                f"hata oluştu: {str(e)}"
-            ),
-        )
-
-    finally:
-        db.close()
 
 @app.post(
     "/admin/talep-devret",
@@ -428,27 +299,6 @@ def admin_talebi_devret(
     finally:
         db.close()
 
-
-@app.get(
-    "/personel/token-kontrol",
-    tags=["Personel"],
-)
-def personel_token_kontrol(
-    personel: dict = Depends(
-        personel_token_dogrula
-    ),
-):
-    return {
-        "mesaj": "Personel tokenı geçerli.",
-        "kullanici_id":
-            personel["kullanici_id"],
-        "kullanici_eposta":
-            personel["kullanici_eposta"],
-        "kullanici_ad_soyad":
-            personel["kullanici_ad_soyad"],
-        "rol":
-            personel["rol"],
-    }
 
 @app.get(
     "/personel/profil",
